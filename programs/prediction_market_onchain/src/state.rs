@@ -3,6 +3,7 @@ use anchor_lang::prelude::*;
 #[derive(InitSpace)]
 #[account]
 pub struct Market {
+    pub market_id: u64,
     pub admin: Pubkey,
     pub usdc_mint: Pubkey,
     pub outcome_yes_mint: Pubkey, // SPL token mint for "yes" shares
