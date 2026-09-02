@@ -76,6 +76,7 @@ pub struct MintShares<'info>{
 pub fn mint_shares_handler(ctx: Context<MintShares>, amount: u64) -> Result<()> {
 
         let market = &ctx.accounts.market;
+
         // 1. Transfer USDC from user to vault.
         let cpi_ctx = CpiContext::new(
             ctx.accounts.token_program.to_account_info(),
@@ -87,11 +88,12 @@ pub fn mint_shares_handler(ctx: Context<MintShares>, amount: u64) -> Result<()> 
         );
         token::transfer(cpi_ctx, amount)?;
 
+        let market_id_bytes = market.market_id.to_le_bytes();
         // 2. Sign as a market pda by providing seeds bec pdas can't have private keys
         let market_seeds= &[
             b"market",
-            market.admin.as_ref(),//TODO: need to check this.
-            &market.market_id.to_le_bytes(),
+            market.admin.as_ref(),
+            &market_id_bytes.as_ref(),
             &[market.bump],
         ];
         let signer_seeds = &[&market_seeds[..]];
