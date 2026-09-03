@@ -234,6 +234,54 @@ describe("prediction_market_onchain", () => {
         console.log("✅ AMM Swap successful! YES -> NO");
         console.log(`   User YES balance: ${Number(userYesBalance.amount)}`);
         console.log(`   User NO balance: ${Number(userNoBalance.amount)}`);
-    }
-    );
+    });
+
+    it("Resolve the tmarket with YES as winner", async () => {
+        await program.methods
+            .resolveMarket(1) // 1 = yes wins
+            .accountsPartial({
+                market: marketPda,
+                oracle: admin.publicKey
+            })
+            .rpc();
+
+        const updateMarket = await program.account.market.fetch(marketPda);
+        assert.equal(updateMarket.isResolved, true);
+        assert.equal(updateMarket.winningOutcome, 1);
+        console.log("Market resolved: Yes is the winner!");
+    });
+
+    it("Redeem winning YES tokens for USDC", async () => {
+        const marketAccount = await program.account.market.fetch(marketPda);
+
+        const userYesAta = getAssociatedTokenAddressSync(marketAccount.outcomeYesMint, admin.publicKey);
+        const userUsdcAta = getAssociatedTokenAddressSync(marketAccount.usdcMint, admin.publicKey);
+        const vaultUsdcAta = getAssociatedTokenAddressSync(marketAccount.usdcMint, vaultAuthority, true);
+
+        const userYesBalanceBefore = await getAccount(provider.connection, userYesAta);
+        const redeemAmount = Number(userYesBalanceBefore.amount);
+
+        await program.methods
+            .redeem()
+            .accountsPartial({
+                user: admin.publicKey,
+                market: marketPda,
+                winningMint: marketAccount.outcomeYesMint,
+                userWinningAta: userYesAta,
+                userUsdcAta: userUsdcAta,
+                vaultUsdcAta: vaultUsdcAta,
+                vaultAuthority: vaultAuthority,
+                tokenProgram: TOKEN_PROGRAM_ID
+            })
+            .rpc();
+
+        const userYesBalanceAfter = await getAccount(provider.connection, userYesAta);
+        assert.equal(Number(userYesBalanceAfter.amount), 0)
+
+        const userUsdcBalanceAfter = await getAccount(provider.connection, userUsdcAta);
+        assert.equal(Number(userUsdcBalanceAfter.amount), redeemAmount);
+
+        console.log(`Successfully redeem ${redeemAmount} YES token for USDC!`);
+        console.log(` Final usdc balance: ${Number(userUsdcBalanceAfter.amount)} `);
+    });
 });
