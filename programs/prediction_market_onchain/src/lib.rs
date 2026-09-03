@@ -36,6 +36,14 @@ pub mod prediction_market_onchain {
     pub fn add_liquidity(ctx: Context<AddLiquidity>, amount: u64) -> Result<()> {
         instructions::add_liquidity::handler(ctx, amount)
     }
+
+    pub fn resolve_market(ctx: Context<ResolveMarket>, outcome: u8) -> Result<()> {
+        instructions::resolve_market::handler(ctx, outcome)
+    }
+
+    pub fn redeem(ctx: Context<Redeem>) -> Result<()> {
+        instructions::redeem::handler(ctx)
+    }
 }
 
 #[derive(Accounts)]
