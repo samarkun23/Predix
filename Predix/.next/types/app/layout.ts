@@ -1,4 +1,4 @@
-// File: /var/home/samarkun/Downloads/solana/projects/prediction_market_onchain/solstice/app/layout.tsx
+// File: /var/home/samarkun/Downloads/solana/projects/prediction_market_onchain/Predix/app/layout.tsx
 import * as entry from '../../../app/layout.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 
