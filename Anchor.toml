@@ -6,13 +6,13 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-prediction_market_onchain = "DEqrLA39SpQF9C4UDgs9uoYjTSj362hHbwnJigFT4ebE"
+prediction_market_onchain = "j3bfzTbouGfN1dUAcD81BpuzRKXt1jjqxJ86rk4ZybA"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
+cluster = "Devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

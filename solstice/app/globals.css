@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    background-color: theme('colors.bg');
+  }
+  body {
+    @apply bg-bg text-text;
+  }
+  ::selection {
+    background: rgba(45, 244, 230, 0.25);
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .section-head::before {
+    content: '// ';
+    color: theme('colors.textFaint');
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Fixed background glow layer */
+.bg-glow {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(600px circle at 10% 0%, rgba(255,46,154,0.09), transparent 60%),
+    radial-gradient(600px circle at 90% 0%, rgba(45,244,230,0.09), transparent 60%),
+    radial-gradient(800px circle at 50% 100%, rgba(155,107,255,0.10), transparent 60%);
+}
+
+/* Fixed grid-line layer */
+.bg-grid {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(139,92,246,0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(139,92,246,0.05) 1px, transparent 1px);
+  background-size: 34px 34px;
+  -webkit-mask-image: radial-gradient(ellipse 100% 70% at 50% 0%, black 40%, transparent 100%);
+  mask-image: radial-gradient(ellipse 100% 70% at 50% 0%, black 40%, transparent 100%);
+}

@@ -5,7 +5,7 @@ pub mod state;
 // imports
 pub use instructions::*;
 
-declare_id!("DEqrLA39SpQF9C4UDgs9uoYjTSj362hHbwnJigFT4ebE");
+declare_id!("j3bfzTbouGfN1dUAcD81BpuzRKXt1jjqxJ86rk4ZybA");
 
 #[program]
 pub mod prediction_market_onchain {
