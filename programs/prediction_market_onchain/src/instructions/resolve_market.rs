@@ -1,6 +1,5 @@
-use crate::{resolve_market, state::Market};
+use crate::state::Market;
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self};
 
 #[error_code]
 pub enum CustomError {
@@ -31,6 +30,11 @@ pub fn handler(ctx: Context<ResolveMarket>, outcome: u8) -> Result<()> {
 
     market.is_resolved = true;
     market.winning_outcome = outcome;
+
+    // 48 hours = 172,800 sec
+    market.dispute_deadline = Clock::get()?.unix_timestamp + 172800;
+    market.is_disputed = false;
+    market.disputed_count = 0;
 
     msg!("Market resolved! Winning outcome {}", outcome);
     Ok(())

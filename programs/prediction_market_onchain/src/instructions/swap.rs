@@ -1,10 +1,7 @@
 use crate::state::Market;
 use anchor_lang::prelude::*;
 use anchor_lang::Accounts;
-use anchor_spl::{
-    associated_token::spl_associated_token_account::tools::account,
-    token::{self, Mint, MintTo, Token, TokenAccount, Transfer},
-};
+use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
 #[derive(Accounts)]
 pub struct Swap<'info> {

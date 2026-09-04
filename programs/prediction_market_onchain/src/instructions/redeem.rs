@@ -1,6 +1,6 @@
 use crate::state::Market;
 use anchor_lang::prelude::*;
-use anchor_spl::{associated_token::spl_associated_token_account::solana_program::message, token::{self, Burn, Mint, Token, TokenAccount, Transfer}};
+use anchor_spl::token::{self, Burn, Mint, Token, TokenAccount, Transfer};
 
 #[error_code]
 pub enum CustomError {
@@ -13,7 +13,11 @@ pub enum CustomError {
     #[msg("Invalid mint match here")]
     InvaildMintMatch,
     #[msg("Invalid winning token")]
-    InvalidWinningToken
+    InvalidWinningToken,
+    #[msg("Dispute window is still open, please wait")]
+    DisputeWindowOpen,
+    #[msg("Market is disputed, funds frozen for V2 governance")]
+    MarketDisputed,
 }
 
 #[derive(Accounts)]
@@ -72,6 +76,12 @@ pub struct Redeem<'info>{
 pub fn handler(ctx: Context<Redeem>) -> Result<()> {
     let market = &ctx.accounts.market;
     let amount_to_redeem = ctx.accounts.user_winning_ata.amount;
+
+    require!(
+        Clock::get()?.unix_timestamp > market.dispute_deadline,
+        CustomError::DisputeWindowOpen
+    );
+    require!(!market.is_disputed, CustomError::MarketDisputed);
 
     require!(amount_to_redeem > 0, CustomError::NoTokenToRedeem); 
 

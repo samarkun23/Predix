@@ -71,7 +71,7 @@ pub fn handler(ctx: Context<AddLiquidity>, amount: u64) -> Result<()> {
             authority: ctx.accounts.lp_provider.to_account_info(),
         },
     );
-    token::transfer(transfer_yes_ctx, amount);
+    token::transfer(transfer_yes_ctx, amount)?;
 
     // tranasfer no tokens from user account to vault no account
     let transfer_no_ctx = CpiContext::new(
@@ -82,7 +82,7 @@ pub fn handler(ctx: Context<AddLiquidity>, amount: u64) -> Result<()> {
             authority: ctx.accounts.lp_provider.to_account_info(),
         },
     );
-    token::transfer(transfer_no_ctx, amount);
+    token::transfer(transfer_no_ctx, amount)?;
 
     msg!(
         "Liquidity added {} yes and {} no token in the pool",

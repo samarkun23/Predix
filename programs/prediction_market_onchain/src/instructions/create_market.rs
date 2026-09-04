@@ -2,13 +2,12 @@ use crate::state::Market;
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token::{Mint, Token, TokenAccount}
+    token::{Mint, Token, TokenAccount},
 };
 
-
 #[derive(Accounts)]
-#[instruction(market_id:u64)]
-pub struct CreateMarket<'info>{
+#[instruction(market_id:u64, resolution_oracle: Pubkey, resolution_time: i64, question: String, oracle_source: String)]
+pub struct CreateMarket<'info> {
     #[account(mut)]
     pub admin: Signer<'info>,
 
@@ -28,7 +27,7 @@ pub struct CreateMarket<'info>{
 
     pub usdc_mint: Account<'info, Mint>,
 
-    // Yes mint account init 
+    // Yes mint account init
     #[account(
         init,
         payer = admin,
@@ -54,7 +53,7 @@ pub struct CreateMarket<'info>{
     /// CHECK: This is a PDA used solely for signing CPIs, it holds no data.
     pub vault_authority: UncheckedAccount<'info>,
 
-    // Vault usdc , yes and no init 
+    // Vault usdc , yes and no init
     #[account(
         init,
         payer = admin,
@@ -81,7 +80,7 @@ pub struct CreateMarket<'info>{
 
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
-    pub associated_token_program: Program<'info, AssociatedToken>
+    pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
 pub fn create_market_handler(
@@ -89,7 +88,9 @@ pub fn create_market_handler(
     market_id: u64,
     resolution_oracle: Pubkey,
     resolution_time: i64,
-) -> Result<()>{
+    question: String,
+    oracle_source: String,
+) -> Result<()> {
     let market = &mut ctx.accounts.market;
 
     market.market_id = market_id;
@@ -103,8 +104,16 @@ pub fn create_market_handler(
     market.resolution_time = resolution_time;
     market.is_resolved = false;
     market.winning_outcome = 0; // 0 = None
+    market.dispute_deadline = 0;
+    market.is_disputed = false;
+    market.disputed_count = 0;
+
+    market.question = question;
+    market.oracle_source = oracle_source;
+
     market.bump = ctx.bumps.market;
 
     msg!("Market created Successfully with ID {}", market_id);
     Ok(())
 }
+
