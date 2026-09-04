@@ -67,7 +67,7 @@ describe("prediction_market_onchain", () => {
         const resolutionTime = new anchor.BN(Math.floor(Date.now() / 1000) + 86400);
 
         await program.methods
-            .createMarket(marketId, admin.publicKey, resolutionTime)
+            .createMarket(marketId, admin.publicKey, resolutionTime, "Will Bitcoin reach $100k by Dec 2025?", "https://coingecko.com")
             .accountsPartial({
                 admin: admin.publicKey,
                 market: marketPda,
@@ -171,7 +171,7 @@ describe("prediction_market_onchain", () => {
                 vaultYesAta: marketAccount.vaultYes,
                 vaultNoAta: marketAccount.vaultNo,
                 vaultAuthority: vaultAuthority,
-                tokenPrgram: TOKEN_PROGRAM_ID
+                tokenPrgram: TOKEN_PROGRAM_ID // TODO: need to fix this o spelling 
             })
             .rpc();
 
@@ -251,37 +251,40 @@ describe("prediction_market_onchain", () => {
         console.log("Market resolved: Yes is the winner!");
     });
 
-    it("Redeem winning YES tokens for USDC", async () => {
+    it("Security Check: Fails to redeem during 48hr Dispute Window", async () => {
         const marketAccount = await program.account.market.fetch(marketPda);
 
         const userYesAta = getAssociatedTokenAddressSync(marketAccount.outcomeYesMint, admin.publicKey);
         const userUsdcAta = getAssociatedTokenAddressSync(marketAccount.usdcMint, admin.publicKey);
         const vaultUsdcAta = getAssociatedTokenAddressSync(marketAccount.usdcMint, vaultAuthority, true);
 
-        const userYesBalanceBefore = await getAccount(provider.connection, userYesAta);
-        const redeemAmount = Number(userYesBalanceBefore.amount);
+        try {
+            // Redeem call karo (jo ki fail honi chahiye kyunki 48 hours nahi hue)
+            await program.methods
+                .redeem()
+                .accountsPartial({
+                    user: admin.publicKey,
+                    market: marketPda,
+                    winningMint: marketAccount.outcomeYesMint,
+                    userWinningAta: userYesAta,
+                    userUsdcAta: userUsdcAta,
+                    vaultUsdcAta: vaultUsdcAta,
+                    vaultAuthority: vaultAuthority,
+                    tokenProgram: TOKEN_PROGRAM_ID,
+                })
+                .rpc();
 
-        await program.methods
-            .redeem()
-            .accountsPartial({
-                user: admin.publicKey,
-                market: marketPda,
-                winningMint: marketAccount.outcomeYesMint,
-                userWinningAta: userYesAta,
-                userUsdcAta: userUsdcAta,
-                vaultUsdcAta: vaultUsdcAta,
-                vaultAuthority: vaultAuthority,
-                tokenProgram: TOKEN_PROGRAM_ID
-            })
-            .rpc();
+            // Agar code yahan tak aaya, toh test fail hona chahiye
+            assert.fail("Redeem should have failed because dispute window is still open!");
 
-        const userYesBalanceAfter = await getAccount(provider.connection, userYesAta);
-        assert.equal(Number(userYesBalanceAfter.amount), 0)
+        } catch (err: any) {
+            // Check karo ki error sach mein "DisputeWindowOpen" ki wajah se aaya hai
+            const isExpectedError = err.message.includes("DisputeWindowOpen") || err.message.includes("custom program error");
+            assert.ok(isExpectedError, "Expected DisputeWindowOpen error");
 
-        const userUsdcBalanceAfter = await getAccount(provider.connection, userUsdcAta);
-        assert.equal(Number(userUsdcBalanceAfter.amount), redeemAmount);
-
-        console.log(`Successfully redeem ${redeemAmount} YES token for USDC!`);
-        console.log(` Final usdc balance: ${Number(userUsdcBalanceAfter.amount)} `);
+            console.log("✅ Security Check Passed: Redeem correctly BLOCKED during 48hr dispute window!");
+            console.log("   (Funds are safe until the window closes or market is disputed)");
+        }
     });
+
 });

@@ -16,12 +16,16 @@ pub mod prediction_market_onchain {
         market_id: u64,
         resolution_oracle: Pubkey,
         resolution_time: i64,
+        question: String,
+        oracle_source: String,
     ) -> Result<()> {
         instructions::create_market::create_market_handler(
             ctx,
             market_id,
             resolution_oracle,
             resolution_time,
+            question,
+            oracle_source,
         )
     }
 
@@ -39,6 +43,10 @@ pub mod prediction_market_onchain {
 
     pub fn resolve_market(ctx: Context<ResolveMarket>, outcome: u8) -> Result<()> {
         instructions::resolve_market::handler(ctx, outcome)
+    }
+
+    pub fn dispute_market(ctx: Context<DisputeMarket>) -> Result<()> {
+        instructions::dispute_market::handler(ctx)
     }
 
     pub fn redeem(ctx: Context<Redeem>) -> Result<()> {
