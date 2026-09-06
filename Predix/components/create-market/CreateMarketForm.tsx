@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import * as anchor from '@coral-xyz/anchor'
 import type { MarketCategory } from '@/lib/types'
 import QuestionField from '@/components/create-market/QuestionField'
 import CategorySelect from '@/components/create-market/CategorySelect'
@@ -9,6 +10,10 @@ import LiquidityField from '@/components/create-market/LiquidityField'
 import OracleSourceField from '@/components/create-market/OracleSourceField'
 import FormSummaryPanel from '@/components/create-market/FormSummaryPanel'
 import SubmitBar from '@/components/create-market/SubmitBar'
+import { useWallet } from '@solana/wallet-adapter-react'
+import { getProgram, getVaultAuthority } from '@/lib/anchor'
+import { Keypair, PublicKey, SystemProgram } from '@solana/web3.js'
+import { ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from '@solana/spl-token'
 
 function daysUntil(dateStr: string): number {
   if (!dateStr) return 0
@@ -17,12 +22,17 @@ function daysUntil(dateStr: string): number {
 }
 
 export default function CreateMarketForm() {
+  const { publicKey, signTransaction , signAllTransactions} = useWallet()
+
   const [question, setQuestion] = useState('')
   const [category, setCategory] = useState<MarketCategory>('crypto')
   const [resolutionDate, setResolutionDate] = useState('')
   const [liquidity, setLiquidity] = useState('')
   const [oracleSource, setOracleSource] = useState('')
   const [successTx, setSuccessTx] = useState<string | null>(null)
+
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const endsInDays = useMemo(() => daysUntil(resolutionDate), [resolutionDate])
 
@@ -32,14 +42,82 @@ export default function CreateMarketForm() {
     parseFloat(liquidity) > 0 &&
     oracleSource.trim().length > 4
 
-  function handleSubmit() {
-    if (!isValid) return
-    const payload = { question, category, resolutionDate, liquidity, oracleSource }
-    // eslint-disable-next-line no-console
-    console.log('DEPLOY_MARKET payload:', payload)
-    const tx = Math.random().toString(16).slice(2, 6) + '...' + Math.random().toString(16).slice(2, 6)
-    setSuccessTx(tx)
-    setTimeout(() => setSuccessTx(null), 4000)
+  async function handleSubmit() {
+    if (!isValid || !publicKey || !signTransaction || !signAllTransactions) {
+      setError('Please connect your wallet and fill all fields.')
+      return;
+    }
+
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const program = getProgram(publicKey, signTransaction, signAllTransactions);
+
+      // inputs
+      const marketId = new anchor.BN(Date.now());
+      const resolutionTime = new anchor.BN(Math.floor(new Date(resolutionDate).getTime() / 1000));
+      const questionString = question.trim();
+      const oracleSourceString = oracleSource.trim();
+
+      // PDA & keypair
+      const [marketPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('market'), publicKey.toBuffer(), marketId.toArrayLike(Buffer, 'le', 8)],
+        program.programId
+      );
+      const vaultAuthority = getVaultAuthority(marketPda);
+      const yesMintKeypair = Keypair.generate();
+      const noMintKeypair = Keypair.generate();
+
+      // devnet usdc mint address 
+      const usdcMint = new anchor.web3.PublicKey('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU');
+
+      // vault atas
+      const vaultUsdcAta = getAssociatedTokenAddressSync(usdcMint, vaultAuthority, true);
+      const vaultYesAta = getAssociatedTokenAddressSync(yesMintKeypair.publicKey, vaultAuthority, true);
+      const vaultNoAta = getAssociatedTokenAddressSync(noMintKeypair.publicKey, vaultAuthority, true);
+
+      // trx build and send 
+      const tx = await program.methods
+        .createMarket(
+          marketId,
+          publicKey,
+          resolutionTime,
+          questionString,
+          oracleSourceString,
+        )
+        .accounts({
+          admin: publicKey,
+          market: marketPda,
+          usdcMint: usdcMint,
+          outcomeYesMint: yesMintKeypair.publicKey,
+          outcomeNoMint: noMintKeypair.publicKey,
+          vaultAuthority: vaultAuthority,
+          vaultUsdcAta: vaultUsdcAta,
+          vaultYesAta: vaultYesAta,
+          vaultNoAta: vaultNoAta,
+          systemProgram: SystemProgram.programId,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        })
+        .signers([yesMintKeypair, noMintKeypair])
+        .rpc();
+
+        console.log('Market created with tx:', tx)
+        setSuccessTx(tx)
+
+        // form reset
+        setQuestion('')
+        setResolutionDate('')
+        setLiquidity('')
+        setOracleSource('')
+
+    } catch (err) {
+      console.error('Error creating market:', err) 
+      setError('An error occurred while creating the market.')
+    }finally{
+      setIsLoading(false)
+    }
   }
 
   function handleDiscard() {
@@ -48,6 +126,7 @@ export default function CreateMarketForm() {
     setLiquidity('')
     setOracleSource('')
     setSuccessTx(null)
+    setError(null)
   }
 
   return (
@@ -61,9 +140,16 @@ export default function CreateMarketForm() {
 
         {successTx && (
           <p className="rounded border border-green/40 bg-green/10 px-3 py-2.5 text-xs text-green">
-            &gt; MARKET_DEPLOYED · tx: {successTx}
+            &gt; MARKET_DEPLOYED · tx: {successTx.slice(0,8)}...{successTx.slice(-8)}
           </p>
         )}
+        {
+          error && (
+            <p className="rounded border border-red/40 bg-red/10 px-3 py-2.5 text-xs text-red">
+              &gt; ERROR · {error}
+            </p>
+          )
+        }
       </div>
 
       <div className="lg:col-span-2">
@@ -76,7 +162,7 @@ export default function CreateMarketForm() {
       </div>
 
       <div className="lg:col-span-5">
-        <SubmitBar isValid={isValid} onDiscard={handleDiscard} onSubmit={handleSubmit} />
+        <SubmitBar isValid={isValid} isLoading={isLoading} onDiscard={handleDiscard} onSubmit={handleSubmit} />
       </div>
     </div>
   )
