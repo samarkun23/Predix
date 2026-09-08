@@ -27,19 +27,21 @@ export interface PricePoint {
   price: number
 }
 
-export type TradeSide = 'buy-yes' | 'buy-no' | 'sell-yes' | 'sell-no'
+export type SwapSide = 'buy_yes' | 'sell_yes' | 'buy_no' | 'sell_no'
 
-export interface Trade {
+export interface Swap {
   id: string
   time: string
-  side: TradeSide
+  side: SwapSide
   price: number
-  size: number
+  amountUsdc: number
 }
 
-export interface OrderBookRow {
-  price: number
-  size: number
+export interface PoolState {
+  yesReserve: number // USDC value on the YES side of the pool
+  noReserve: number // USDC value on the NO side of the pool
+  feeBps: number // swap fee in basis points, e.g. 30 = 0.30%
+  lpProviders: number // number of wallets that have provided liquidity
 }
 
 export type PositionStatus = 'open' | 'resolved-won' | 'resolved-lost'

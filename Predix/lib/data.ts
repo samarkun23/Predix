@@ -3,8 +3,9 @@ import type {
   Stat,
   TrustPoint,
   PricePoint,
-  Trade,
-  OrderBookRow,
+  Swap,
+  SwapSide,
+  PoolState,
   Position,
 } from './types'
 
@@ -122,6 +123,12 @@ function seededRandom(seed: number) {
   }
 }
 
+function hashSeed(id: string): number {
+  let h = 7
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) % 100000
+  return h + 1
+}
+
 export function generatePriceHistory(
   basePrice: number,
   points = 60,
@@ -138,33 +145,62 @@ export function generatePriceHistory(
   return history
 }
 
-export const priceHistory: PricePoint[] = generatePriceHistory(62, 60, 7)
+// Per-market price history, keyed by market id.
+const priceHistoryCache = new Map<string, PricePoint[]>()
+export function getPriceHistory(marketId: string): PricePoint[] {
+  if (!priceHistoryCache.has(marketId)) {
+    const market = getMarketById(marketId)
+    const base = market?.yesProbability ?? 50
+    priceHistoryCache.set(marketId, generatePriceHistory(base, 60, hashSeed(marketId)))
+  }
+  return priceHistoryCache.get(marketId)!
+}
 
-export const recentTrades: Trade[] = [
-  { id: 't1', time: '14:02:11', side: 'buy-yes', price: 62.4, size: 480 },
-  { id: 't2', time: '14:01:47', side: 'sell-no', price: 37.1, size: 220 },
-  { id: 't3', time: '14:00:58', side: 'buy-no', price: 38.0, size: 150 },
-  { id: 't4', time: '13:59:32', side: 'buy-yes', price: 61.8, size: 920 },
-  { id: 't5', time: '13:58:04', side: 'sell-yes', price: 61.2, size: 340 },
-  { id: 't6', time: '13:57:20', side: 'buy-yes', price: 60.9, size: 175 },
-  { id: 't7', time: '13:56:11', side: 'buy-no', price: 39.4, size: 610 },
-]
+// Per-market AMM pool state, derived from the market's mock pooledUsd / yesProbability
+// so PoolPanel and SwapPanel always agree with what's shown on the card/header.
+export function getPoolState(marketId: string): PoolState {
+  const market = getMarketById(marketId)
+  const total = market?.pooledUsd ?? 100_000
+  const yesFraction = (market?.yesProbability ?? 50) / 100
+  const rand = seededRandom(hashSeed(marketId))
+  return {
+    yesReserve: Math.round(total * yesFraction),
+    noReserve: Math.round(total * (1 - yesFraction)),
+    feeBps: 30,
+    lpProviders: Math.round(20 + rand() * 120),
+  }
+}
 
-export const orderBookAsks: OrderBookRow[] = [
-  { price: 65.2, size: 1240 },
-  { price: 64.6, size: 860 },
-  { price: 64.1, size: 2010 },
-  { price: 63.5, size: 430 },
-  { price: 62.9, size: 1580 },
-]
-
-export const orderBookBids: OrderBookRow[] = [
-  { price: 62.1, size: 1720 },
-  { price: 61.5, size: 640 },
-  { price: 60.8, size: 990 },
-  { price: 60.2, size: 2210 },
-  { price: 59.6, size: 510 },
-]
+// Per-market recent swaps (mock activity feed), keyed by market id.
+const SWAP_SIDES: SwapSide[] = ['buy_yes', 'sell_yes', 'buy_no', 'sell_no']
+export function getRecentSwaps(marketId: string): Swap[] {
+  const market = getMarketById(marketId)
+  const basePrice = (market?.yesProbability ?? 50) / 100
+  const rand = seededRandom(hashSeed(marketId) + 17)
+  const swaps: Swap[] = []
+  let hour = 14
+  let minute = 12
+  let second = 1
+  for (let i = 0; i < 8; i++) {
+    const side = SWAP_SIDES[Math.floor(rand() * SWAP_SIDES.length)]
+    const isYes = side === 'buy_yes' || side === 'sell_yes'
+    const jitter = (rand() - 0.5) * 0.02
+    const price = Math.max(0.02, Math.min(0.98, (isYes ? basePrice : 1 - basePrice) + jitter))
+    const amountUsdc = Math.round((0.5 + rand() * 4) * 100) / 100
+    second -= Math.floor(rand() * 15) + 1
+    if (second < 0) {
+      second += 60
+      minute -= 1
+      if (minute < 0) {
+        minute += 60
+        hour -= 1
+      }
+    }
+    const time = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}`
+    swaps.push({ id: `${marketId}-swap-${i}`, time, side, price, amountUsdc })
+  }
+  return swaps
+}
 
 export const positions: Position[] = [
   {
@@ -218,6 +254,28 @@ export const positions: Position[] = [
     status: 'resolved-lost',
   },
 ]
+
+export interface SentimentData {
+  fearGreedScore: number
+  signals: { label: string; tag: 'BULL' | 'BEAR' | 'NEUT' }[]
+  buyYesFlowPct: number
+}
+
+const SIGNAL_LABELS = ['PRICE_MOM', 'POOL_DEPTH', 'VOL_DELTA', 'LP_FLOW', 'WHALE_ACT']
+
+export function getSentiment(marketId: string): SentimentData {
+  const market = getMarketById(marketId)
+  const rand = seededRandom(hashSeed(marketId) + 31)
+  const yesProbability = market?.yesProbability ?? 50
+  const fearGreedScore = Math.round(Math.min(95, Math.max(5, yesProbability + (rand() - 0.5) * 30)))
+  const tags: SentimentData['signals'][number]['tag'][] = ['BULL', 'BEAR', 'NEUT']
+  const signals = SIGNAL_LABELS.map((label) => ({
+    label,
+    tag: tags[Math.floor(rand() * tags.length)],
+  }))
+  const buyYesFlowPct = Math.round(Math.min(90, Math.max(10, yesProbability + (rand() - 0.5) * 20)))
+  return { fearGreedScore, signals, buyYesFlowPct }
+}
 
 export function getMarketById(id: string): Market | undefined {
   return markets.find((m) => m.id === id)

@@ -3,6 +3,8 @@ import { Program, AnchorProvider,  Idl } from "@coral-xyz/anchor"
 
 import idl from "@/idl/prediction_market_onchain.json";
 
+console.log("IDL Loaded:", idl.metadata?.name, "Accounts:", idl.accounts?.length);
+
 export const connection = new Connection("https://api.devnet.solana.com", "confirmed");
 export const PROGRAM_ID = new PublicKey("j3bfzTbouGfN1dUAcD81BpuzRKXt1jjqxJ86rk4ZybA");
 
@@ -24,7 +26,7 @@ export const getProgram = (
     });
 
     // TODO: Fix the type issue with idl and PROGRAM_ID
-    return new Program(idl as any, PROGRAM_ID as any, provider as any);
+    return new Program(idl as any, provider as any);
 };
 
 export const getVaultAuthority = (marketPda: PublicKey) => {
