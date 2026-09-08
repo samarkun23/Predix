@@ -1,46 +1,39 @@
-import type { Trade } from '@/lib/types'
+import type { Swap } from '@/lib/types'
 
 interface RecentActivityProps {
-  trades: Trade[]
+  swaps: Swap[]
 }
 
-const SIDE_LABEL: Record<Trade['side'], { label: string; color: string }> = {
-  'buy-yes': { label: 'BUY_YES', color: 'text-green' },
-  'sell-yes': { label: 'SELL_YES', color: 'text-green' },
-  'buy-no': { label: 'BUY_NO', color: 'text-pink' },
-  'sell-no': { label: 'SELL_NO', color: 'text-pink' },
+const SIDE_LABEL: Record<Swap['side'], { label: string; color: string }> = {
+  buy_yes: { label: 'BUY_YES', color: 'text-green' },
+  sell_yes: { label: 'SELL_YES', color: 'text-pink' },
+  buy_no: { label: 'BUY_NO', color: 'text-pink' },
+  sell_no: { label: 'SELL_NO', color: 'text-green' },
 }
 
-export default function RecentActivity({ trades }: RecentActivityProps) {
+export default function RecentActivity({ swaps }: RecentActivityProps) {
   return (
     <div className="rounded border border-border bg-bg2 p-4 sm:p-5">
       <h2 className="section-head text-xs font-semibold uppercase tracking-[0.06em] text-text">
-        RECENT_ACTIVITY
+        RECENT_SWAPS
       </h2>
 
       <div className="mt-3 overflow-x-auto">
-        <table className="w-full min-w-[420px] text-[11px]">
-          <thead>
-            <tr className="text-left uppercase tracking-[0.06em] text-textFaint">
-              <th className="py-1.5 font-normal">TIME</th>
-              <th className="py-1.5 font-normal">SIDE</th>
-              <th className="py-1.5 text-right font-normal">PRICE</th>
-              <th className="py-1.5 text-right font-normal">SIZE</th>
-            </tr>
-          </thead>
-          <tbody>
-            {trades.map((trade) => (
-              <tr key={trade.id} className="border-t border-border/60">
-                <td className="py-1.5 text-textDim">{trade.time}</td>
-                <td className={`py-1.5 font-medium ${SIDE_LABEL[trade.side].color}`}>
-                  {SIDE_LABEL[trade.side].label}
-                </td>
-                <td className="py-1.5 text-right text-text">{trade.price.toFixed(1)}¢</td>
-                <td className="py-1.5 text-right text-textDim">${trade.size}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="min-w-[380px]">
+          {swaps.map((swap) => (
+            <div
+              key={swap.id}
+              className="grid grid-cols-4 gap-2 border-t border-border/60 py-2 text-[11px] first:border-0"
+            >
+              <span className="text-textDim">{swap.time}</span>
+              <span className={`font-medium ${SIDE_LABEL[swap.side].color}`}>
+                [{SIDE_LABEL[swap.side].label}]
+              </span>
+              <span className="text-right text-text">{swap.price.toFixed(3)}</span>
+              <span className="text-right text-textDim">{swap.amountUsdc.toFixed(2)} USDC</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )
