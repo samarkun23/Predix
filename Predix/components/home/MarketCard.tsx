@@ -1,48 +1,73 @@
 import Link from 'next/link'
-import type { Market } from '@/lib/types'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import ProbabilityBar from '@/components/home/ProbabilityBar'
 import { CATEGORY_BADGE_VARIANT, CATEGORY_LABEL } from '@/components/home/CategoryStyles'
 
 interface MarketCardProps {
-  market: Market
+  marketData: any
 }
 
-export default function MarketCard({ market }: MarketCardProps) {
-  const yesPrice = market.yesProbability
-  const noPrice = 100 - market.yesProbability
+export default function MarketCard({ marketData }: MarketCardProps) {
+  if (!marketData) {
+    return null; // or some fallback UI
+  }
+
+  const account = marketData.account;
+
+  const marketPublickKey = marketData.publicKey;
+
+  // resolution times into days
+  const resolutionTime = account.resolutionTime.toNumber() * 1000
+  const daysLeft = Math.max(0, Math.round((resolutionTime - Date.now()) / (1000 * 60 * 60 * 24)))
+
+  // status badge decide
+  let statusBadge = (
+    <span className='rounded bg-cyan/10 px-2 py-1 text-[10px] font-bold uppercase'>
+      ACTIVE
+    </span>
+  )
+  let daysText = `${daysLeft}d left`
+
+  if(account.isResolved){
+    if(account.isDisputed){
+      statusBadge = (
+        <span className='rounded bg-red/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-red'>
+          DISPUTED
+        </span>
+      )
+      daysText = 'Frozen'
+    }else {
+      statusBadge = (
+        <span className='rounded bg-red/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-red'>
+          RESOLVED
+        </span>
+      )
+      daysText = account.winningOutcome === 1 ? 'YES Won' : 'NO Won' // TODO: need to check this 
+    }
+  }
 
   return (
-    <div className="group flex flex-col gap-4 rounded border-t-2 border-t-purple border-x border-b border-border bg-panel p-4 transition-colors hover:border-borderStrong hover:bg-panelStrong sm:p-5">
-      <Link href={`/markets/${market.id}`} className="flex flex-col gap-4">
-        <div className="flex items-center justify-between gap-2">
-          <Badge variant={CATEGORY_BADGE_VARIANT[market.category]}>
-            {CATEGORY_LABEL[market.category]}
-          </Badge>
-          <span className="text-lg font-semibold text-green" style={{ textShadow: '0 0 14px currentColor' }}>
-            {yesPrice}%
+     <Link href={`/markets/${marketPublickKey}`}>
+      <div className="group cursor-pointer rounded-xl border border-border bg-bg/50 p-6 transition hover:border-cyan/50 hover:bg-bg/80 h-full flex flex-col">
+        <div className="mb-4 flex items-center justify-between">
+          {statusBadge}
+          <span className="text-xs text-textDim">{daysText}</span>
+        </div>
+        
+        <h3 className="mb-4 text-lg font-bold leading-snug text-white group-hover:text-cyan transition flex-1">
+          {account.question}
+        </h3>
+
+        <div className="mt-4 flex items-center justify-between border-t border-border pt-4 text-xs text-textDim">
+          <span className="truncate max-w-[150px]">
+            Source: {account.oracleSource ? account.oracleSource.replace('https://', '').slice(0, 20) + "..." : "Manual"}...
+          </span>
+          <span className="text-cyan font-medium group-hover:translate-x-1 transition-transform">
+            Trade Now →
           </span>
         </div>
-
-        <p className="min-h-[2.75rem] text-sm leading-snug text-text">{market.question}</p>
-
-        <ProbabilityBar yesProbability={market.yesProbability} />
-      </Link>
-
-      <div className="grid grid-cols-2 gap-2">
-        <Button variant="yes" className="w-full">
-          YES · {yesPrice}¢
-        </Button>
-        <Button variant="no" className="w-full">
-          NO · {noPrice}¢
-        </Button>
       </div>
-
-      <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.04em] text-textDim">
-        <span>POOL · ${(market.pooledUsd / 1000).toFixed(1)}K</span>
-        <span>{market.endsInDays}D_LEFT</span>
-      </div>
-    </div>
+    </Link>
   )
 }

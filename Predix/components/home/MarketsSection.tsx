@@ -5,7 +5,7 @@ import type { Market, MarketCategory } from '@/lib/types'
 import MarketCard from '@/components/home/MarketCard'
 
 interface MarketsSectionProps {
-  markets: Market[]
+  markets: Market[] // raw data from blockchain
 }
 
 type TabValue = 'all' | MarketCategory
@@ -21,7 +21,7 @@ export default function MarketsSection({ markets }: MarketsSectionProps) {
   const [activeTab, setActiveTab] = useState<TabValue>('all')
 
   const filtered =
-    activeTab === 'all' ? markets : markets.filter((m) => m.category === activeTab)
+    activeTab === 'all' ? markets : markets
 
   return (
     <section className="mx-auto max-w-7xl px-4 pb-20 sm:px-6">
@@ -49,7 +49,8 @@ export default function MarketsSection({ markets }: MarketsSectionProps) {
 
       <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {filtered.map((market) => (
-          <MarketCard key={market.id} market={market} />
+          //@ts-ignore
+          <MarketCard key={market.publicKey.toString()} marketData={market} />
         ))}
       </div>
     </section>
