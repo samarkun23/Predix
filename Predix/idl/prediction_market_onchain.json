@@ -805,8 +805,41 @@
         {
           "name": "resolution_time",
           "type": "i64"
+        },
+        {
+          "name": "question",
+          "type": "string"
+        },
+        {
+          "name": "oracle_source",
+          "type": "string"
         }
       ]
+    },
+    {
+      "name": "dispute_market",
+      "discriminator": [
+        141,
+        181,
+        103,
+        68,
+        255,
+        237,
+        53,
+        26
+      ],
+      "accounts": [
+        {
+          "name": "disputer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true
+        }
+      ],
+      "args": []
     },
     {
       "name": "mint_shares",
@@ -1609,24 +1642,51 @@
         227,
         198,
         154
-      ]
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "market_id", "type": "u64" },
+          { "name": "admin", "type": "pubkey" },
+          { "name": "usdc_mint", "type": "pubkey" },
+          { "name": "outcome_yes_mint", "type": "pubkey" },
+          { "name": "outcome_no_mint", "type": "pubkey" },
+          { "name": "vault_yes", "type": "pubkey" },
+          { "name": "vault_no", "type": "pubkey" },
+          { "name": "resolution_oracle", "type": "pubkey" },
+          { "name": "resolution_time", "type": "i64" },
+          { "name": "is_resolved", "type": "bool" },
+          { "name": "winning_outcome", "type": "u8" },
+          { "name": "question", "type": "string" },
+          { "name": "oracle_source", "type": "string" },
+          { "name": "dispute_deadline", "type": "i64" },
+          { "name": "is_disputed", "type": "bool" },
+          { "name": "disputed_count", "type": "u64" },
+          { "name": "bump", "type": "u8" }
+        ]
+      }
     }
   ],
   "errors": [
     {
       "code": 6000,
-      "name": "InvalidOracle",
+      "name": "MarketAlreadyResolved",
       "msg": "Market is already resolved"
     },
     {
       "code": 6001,
-      "name": "MarketAlreadResolve",
-      "msg": "Market is already resolved"
+      "name": "InsufficientLiquidity",
+      "msg": "Insufficient liquidity in pool"
     },
     {
       "code": 6002,
-      "name": "InvalidOutcome",
-      "msg": "Invalid Outcome"
+      "name": "AmountOutTooLow",
+      "msg": "Calculated amount is too low"
+    },
+    {
+      "code": 6003,
+      "name": "MathOverflow",
+      "msg": "Math operation overflow"
     }
   ],
   "types": [
@@ -1678,6 +1738,26 @@
           {
             "name": "winning_outcome",
             "type": "u8"
+          },
+          {
+            "name": "question",
+            "type": "string"
+          },
+          {
+            "name": "oracle_source",
+            "type": "string"
+          },
+          {
+            "name": "dispute_deadline",
+            "type": "i64"
+          },
+          {
+            "name": "is_disputed",
+            "type": "bool"
+          },
+          {
+            "name": "disputed_count",
+            "type": "u64"
           },
           {
             "name": "bump",
