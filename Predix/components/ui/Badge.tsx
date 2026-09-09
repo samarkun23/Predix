@@ -1,6 +1,6 @@
 import { ReactNode } from 'react'
 
-export type BadgeVariant = 'crypto' | 'politics' | 'sports' | 'network' | 'neutral' | 'info'
+export type BadgeVariant = 'crypto' | 'politics' | 'sports' | 'network' | 'neutral' | 'info' | 'other'
 
 const VARIANT_STYLES: Record<BadgeVariant, string> = {
   crypto: 'text-purple border-purple/40 bg-purple/10',
@@ -9,6 +9,7 @@ const VARIANT_STYLES: Record<BadgeVariant, string> = {
   network: 'text-green border-green/40 bg-green/10',
   neutral: 'text-textDim border-border bg-panel',
   info: 'text-cyan border-cyan/40 bg-cyan/10',
+  other: 'text-textDim border-border bg-panel',
 }
 
 interface BadgeProps {

@@ -58,7 +58,11 @@ export default function CreateMarketForm() {
       const marketId = new anchor.BN(Date.now());
       const resolutionTime = new anchor.BN(Math.floor(new Date(resolutionDate).getTime() / 1000));
       const questionString = question.trim();
-      const oracleSourceString = oracleSource.trim();
+
+      // catagory with orcale string 
+      const categoryTag = ` | C:${category}`;
+      const oracleSourceString = oracleSource.trim().length > 0 ? oracleSource.trim() + categoryTag : `Manual Resolution${categoryTag}`;
+
 
       // PDA & keypair
       const [marketPda] = PublicKey.findProgramAddressSync(
