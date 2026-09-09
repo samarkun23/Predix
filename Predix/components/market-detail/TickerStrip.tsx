@@ -2,11 +2,17 @@ import type { Market } from '@/lib/types'
 
 interface TickerStripProps {
   market: Market
-  change24h: number
+  change24h: number,
+  yesPrice: number,
+  poolTVL: number
 }
 
-export default function TickerStrip({ market, change24h }: TickerStripProps) {
+export default function TickerStrip({ market, change24h, yesPrice, poolTVL }: TickerStripProps) {
   const isUp = change24h >= 0
+
+  const endsInDays = market.endsInDays ?? Math.max(0, Math.round(
+    (new Date(market.resolutionDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+  ))
 
   return (
     <div className="rounded border border-border bg-bg2 px-4 py-3 sm:px-5 sm:py-4">
@@ -27,7 +33,7 @@ export default function TickerStrip({ market, change24h }: TickerStripProps) {
             className="mt-0.5 text-xl font-bold text-green sm:text-2xl"
             style={{ textShadow: '0 0 14px currentColor' }}
           >
-            {market.yesProbability}¢
+            {Math.round(yesPrice)}¢
           </p>
         </div>
         <div className="shrink-0">
@@ -40,12 +46,12 @@ export default function TickerStrip({ market, change24h }: TickerStripProps) {
         <div className="shrink-0">
           <p className="text-[11px] uppercase tracking-[0.06em] text-textDim">POOL_TVL</p>
           <p className="mt-0.5 text-xl font-bold text-text sm:text-2xl">
-            ${(market.pooledUsd / 1000).toFixed(2)}K
+            ${(poolTVL/1000).toFixed(2)}K
           </p>
         </div>
         <div className="shrink-0">
           <p className="text-[11px] uppercase tracking-[0.06em] text-textDim">ENDS</p>
-          <p className="mt-0.5 text-xl font-bold text-cyan sm:text-2xl">{market.endsInDays}D</p>
+          <p className="mt-0.5 text-xl font-bold text-cyan sm:text-2xl">{endsInDays}D</p>
         </div>
       </div>
     </div>

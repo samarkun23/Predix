@@ -7,6 +7,7 @@ export interface Market {
   yesProbability: number // 0-100
   pooledUsd: number
   endsInDays: number
+  resolutionDate: any
 }
 
 export interface Stat {
@@ -42,6 +43,7 @@ export interface PoolState {
   noReserve: number // USDC value on the NO side of the pool
   feeBps: number // swap fee in basis points, e.g. 30 = 0.30%
   lpProviders: number // number of wallets that have provided liquidity
+  totalTVL: number
 }
 
 export type PositionStatus = 'open' | 'resolved-won' | 'resolved-lost'

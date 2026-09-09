@@ -23,6 +23,7 @@ export default function MarketDetailView({
   pool,
   sentiment,
 }: MarketDetailViewProps) {
+  const yesPrice = pool.yesReserve && pool.noReserve ? pool.yesReserve / (pool.yesReserve + pool.noReserve) : 0.5
   const change24h = priceHistory[priceHistory.length - 1].price - priceHistory[0].price
 
   return (
@@ -33,7 +34,7 @@ export default function MarketDetailView({
           (desktop lg: grid re-positions these — see column/row classes below) */}
       <div className="flex flex-col gap-4 lg:grid lg:grid-cols-12 lg:gap-4">
         <div className="lg:col-span-12">
-          <TickerStrip market={market} change24h={change24h} />
+          <TickerStrip market={market} change24h={change24h} yesPrice={yesPrice} poolTVL = {pool.totalTVL || 0}/>
         </div>
 
         <div className="lg:col-start-8 lg:col-span-3 lg:row-start-3">
