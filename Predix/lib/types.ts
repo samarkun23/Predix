@@ -1,4 +1,4 @@
-export type MarketCategory = 'crypto' | 'politics' | 'sports'
+export type MarketCategory = 'crypto' | 'politics' | 'sports' | 'other'
 
 export interface Market {
   id: string
@@ -7,7 +7,8 @@ export interface Market {
   yesProbability: number // 0-100
   pooledUsd: number
   endsInDays: number
-  resolutionDate: any
+  resolutionDate: any,
+  account: any
 }
 
 export interface Stat {
