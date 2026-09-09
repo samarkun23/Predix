@@ -14,6 +14,7 @@ export default function MarketPage() {
   
   const [market, setMarket] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [pool, setPool] = useState<any>(null)
 
   useEffect(() => {
     const fetchMarket = async () => {
@@ -27,10 +28,24 @@ export default function MarketPage() {
         const program = getProgram(publicKey, signTransaction, signAllTransactions)
         const marketPubkey = new PublicKey(params.id as string)
         
-        // ✅ 1. Seedha Blockchain se real data fetch karo
+        //  1. Seedha Blockchain se real data fetch karo
         const account = await (program.account as any).market.fetch(marketPubkey)
 
-        // ✅ 2. Blockchain data ko tumhare 'Market' type ke format mein adapt karo
+        // vault balance
+        const connection = program.provider.connection
+
+        const vaultYesBalance = await connection.getTokenAccountBalance(account.vaultYes)
+        const vaultNoBalance = await connection.getTokenAccountBalance(account.vaultNo)
+
+        const yesReserves = Number(vaultYesBalance.value.amount) / 1_000_000
+        const noReserves = Number(vaultNoBalance.value.amount) / 1_000_000
+
+        // total tvl and price
+        const totalTVL = yesReserves + noReserves
+        const yesPrice = totalTVL > 0 ? (yesReserves / totalTVL) * 100 : 0
+        const noPrice = totalTVL > 0 ? (noReserves / totalTVL) * 100 : 0
+
+        //  2. Blockchain data ko tumhare 'Market' type ke format mein adapt karo
         const adaptedMarket = {
           id: params.id as string,
           question: account.question,
@@ -41,10 +56,22 @@ export default function MarketPage() {
           winningOutcome: account.winningOutcome,
           oracleSource: account.oracleSource,
           // Agar tumhare MarketDetailView mein aur fields chahiye (jaise volume), toh yahan dummy values daal sakte ho
-          volume24h: 0, 
+          volume24h: 0,
+          yesPrice: yesPrice,
+          noPrice: noPrice,
+        }
+
+        const realPoolState = {
+          yesReserves: yesReserves,
+          noReserves: noReserves,
+          totalTVL: totalTVL,
+          swapFee: 0.003,
+          yesPrice: yesPrice,
+          noPrice: noPrice,
         }
 
         setMarket(adaptedMarket)
+        setPool(realPoolState)
       } catch (error) {
         console.error('Failed to fetch market from blockchain:', error)
       } finally {
@@ -81,8 +108,8 @@ export default function MarketPage() {
       // V1 ke liye chart/swaps mock data use karenge, lekin 'market' prop 100% real on-chain data hai!
       priceHistory={getPriceHistory(market.id) || []}
       swaps={getRecentSwaps(market.id) || []}
-      pool={getPoolState(market.id) || { yesReserves: 0, noReserves: 0 }}
-      sentiment={getSentiment(market.id) || { fearGreedScore: 50, signals: [], buyYesFlowPct: 50 }}
+      pool={pool || { yesReserves: 0, noReserves: 0, totalTVL: 0, swapFee: 0.003}}
+      sentiment={{fearGreedScore: 50, signals: [], buyYesFlowPct: 50}}
     />
   )
 }
