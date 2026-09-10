@@ -1,21 +1,119 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { PoolState } from '@/lib/types'
+import * as anchor from '@coral-xyz/anchor'
 import Button from '@/components/ui/Button'
 import { quoteSwap } from '@/lib/amm'
+import { useWallet } from '@solana/wallet-adapter-react'
+import { amountToUiAmount, ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from '@solana/spl-token'
+import { PublicKey } from '@solana/web3.js'
+import { getProgram } from '@/lib/anchor'
 
 interface SwapPanelProps {
+  market: any;
   pool: PoolState
 }
 
-export default function SwapPanel({ pool }: SwapPanelProps) {
+export default function SwapPanel({ market, pool }: SwapPanelProps) {
+  const { publicKey, signTransaction, signAllTransactions } = useWallet();
+
   const [side, setSide] = useState<'yes' | 'no'>('yes')
   const [amount, setAmount] = useState('100.00')
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [isLoading, setIsLoading] = useState(false);
+
+  // mods 
+  const [mode, setMode] = useState<'MINT' | 'ADD_LIQIDITY' | 'SWAP'>('MINT');
+  const [userYesBalance , setUserYesBalance] = useState(0);
+  const [userNoBalance , setUserNoBalance] = useState(0);
+
+  useEffect(() => {
+    const checkBalance = async () => {
+      if (!publicKey || !market) return
+
+      try {
+        const connection = new anchor.web3.Connection(
+          "https://api.devnet.solana.com", "confirmed");
+        const yesAta = getAssociatedTokenAddressSync(new PublicKey(market.account.yesMint), publicKey);
+        const noAta = getAssociatedTokenAddressSync(new PublicKey(market.account.noMint), publicKey);
+
+        // TODO: fix this type issue 
+        //@ts-ignore
+        const yesInfo = new connection.getAccountInfo(yesAta);
+        //@ts-ignore
+        const noInfo = new connection.getAccountInfo(noAta);
+
+        const yesBal = yesInfo ? Number((await connection.getTokenAccountBalance(yesAta)).value.amount) / 1_000_000 : 0;
+        const noBal = yesInfo ? Number((await connection.getTokenAccountBalance(noAta)).value.amount) / 1_000_000 : 0;
+
+        setUserYesBalance(yesBal);
+        setUserNoBalance(noBal);
+
+        // determine mode based on balances and pool state 
+        const poolHasLiqidity = pool && (pool.yesReserve > 1 || pool.noReserve > 1);
+
+        if(!poolHasLiqidity && yesBal > 0 && noBal > 0){
+          setMode('ADD_LIQIDITY');
+        }else if(poolHasLiqidity){
+          setMode('SWAP');
+        }else {
+          setMode('MINT')
+        }
+
+      } catch (error) {
+        
+      }
+    }
+    checkBalance()
+  },[publicKey, market,pool])
 
   const amountUsdc = parseFloat(amount) || 0
   const quote = useMemo(() => quoteSwap(pool, side, amountUsdc), [pool, side, amountUsdc])
+
+  const handleAction = async () => {
+    if(!publicKey || !signTransaction || !signAllTransactions || !market){
+      alert('Pz connect your wallet')
+    }
+    if (!amount || amountUsdc <= 0) return
+
+    setIsLoading(true)
+    try {
+      const program = getProgram(publicKey!, signTransaction!, signAllTransactions! );  
+      const amountLamports = new anchor.BN(amountUsdc * 1_000_000);
+
+      const vaultAuthority = PublicKey.findProgramAddressSync(
+        [Buffer.from('vault'), market.publicKey.toBuffer()],
+        program.programId
+      )[0]
+
+      if(mode === 'MINT'){
+        const userUsdcAta = getAssociatedTokenAddressSync(new PublicKey(market.account.usdcMint), publicKey!);
+        const userYesAta = getAssociatedTokenAddressSync(new PublicKey(market.account.outcomeYesMint), publicKey!);
+        const userNoAta = getAssociatedTokenAddressSync(new PublicKey(market.account.outcomeNoMint), publicKey!);
+        const vaultUsdcAta = getAssociatedTokenAddressSync(new PublicKey(market.account.usdcMint), vaultAuthority, true);
+
+        await program.methods
+          .mintShares(amountLamports)
+          .accounts({
+            user: publicKey!, market: new PublicKey(market.id),
+            usdcMint: new PublicKey(market.account.usdcMint),
+            yesMint: new PublicKey(market.account.outcomeYesMint),
+            noMint: new PublicKey(market.account.outcomeNoMint),
+            userUsdcAta, userYesAta, userNoAta,
+            vaultAuthority,
+            vaultUsdcAta,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+            systemProgram: anchor.web3.SystemProgram.programId
+          }).rpc()
+      }else if(mode === 'ADD_LIQIDITY'){
+        
+      }
+    } catch (error) {
+      
+    }
+  }
 
   return (
     <div className="safe-bottom sticky bottom-0 z-30 rounded border border-border bg-bg2/95 p-4 backdrop-blur-sm sm:p-5 lg:sticky lg:top-20 lg:bottom-auto lg:bg-bg2 lg:backdrop-blur-none">
