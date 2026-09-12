@@ -8,10 +8,22 @@ console.log("IDL Loaded:", idl.metadata?.name, "Accounts:", idl.accounts?.length
 export const connection = new Connection("https://api.devnet.solana.com", "confirmed");
 export const PROGRAM_ID = new PublicKey("j3bfzTbouGfN1dUAcD81BpuzRKXt1jjqxJ86rk4ZybA");
 
+const fixedIdl = {
+    ...(idl as any),
+    address: "j3bfzTbouGfN1dUAcD81BpuzRKXt1jjqxJ86rk4ZybA",
+    accounts: (idl as any).accounts.map((acc: any) => {
+        const typeDef = (idl as any).types.find((t: any) => t.name === acc.type);
+        if(typeDef) {
+            return {...acc, type: typeDef.type};
+        }
+        return acc;
+    })
+} as Idl;
+
 export const getProgram = (
     publicKey: PublicKey,
-    signTransaction: <T extends Transaction | VersionedTransaction>(tx: T) => Promise<T>,
-    signAllTransactions: <T extends Transaction | VersionedTransaction>(txs: T[]) => Promise<T[]>
+    signTransaction: any,
+    signAllTransactions: any
 ) => {
 
     const wallet = {
@@ -26,7 +38,7 @@ export const getProgram = (
     });
 
     // TODO: Fix the type issue with idl and PROGRAM_ID
-    return new Program(idl as any, provider as any);
+    return new Program(fixedIdl as any, provider as any) as any;
 };
 
 export const getVaultAuthority = (marketPda: PublicKey) => {
