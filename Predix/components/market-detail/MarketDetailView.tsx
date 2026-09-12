@@ -38,7 +38,7 @@ export default function MarketDetailView({
         </div>
 
         <div className="lg:col-start-8 lg:col-span-3 lg:row-start-3">
-          <SwapPanel pool={pool} />
+          <SwapPanel pool={pool} market={market} />
         </div>
 
         <div className="lg:col-start-1 lg:col-span-7 lg:row-start-2">
@@ -46,7 +46,7 @@ export default function MarketDetailView({
         </div>
 
         <div className="lg:col-start-8 lg:col-span-3 lg:row-start-2">
-          <PoolPanel pool={pool} />
+          <PoolPanel pool={pool} market={market}/>
         </div>
 
         <div className="lg:col-start-11 lg:col-span-2 lg:row-start-2 lg:row-span-2">
