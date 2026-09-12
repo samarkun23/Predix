@@ -48,6 +48,7 @@ export default function MarketPage() {
         //  2. Blockchain data ko tumhare 'Market' type ke format mein adapt karo
         const adaptedMarket = {
           id: params.id as string,
+          account, 
           question: account.question,
           category: 'crypto', // V1 mein on-chain category nahi hai, default 'crypto' rakho
           resolutionDate: new Date(account.resolutionTime.toNumber() * 1000).toISOString(),
@@ -68,6 +69,7 @@ export default function MarketPage() {
           swapFee: 0.003,
           yesPrice: yesPrice,
           noPrice: noPrice,
+          feeBps: 30,
         }
 
         setMarket(adaptedMarket)
