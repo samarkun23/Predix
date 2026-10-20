@@ -1,3 +1,4 @@
+use crate::errors::MarketError;
 use crate::state::Market;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
@@ -5,24 +6,22 @@ use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 #[derive(Accounts)]
 pub struct AddLiquidity<'info> {
     #[account(mut)]
-    pub lp_provider: Signer<'info>, // user who will provide liquidity
+    pub lp_provider: Signer<'info>,
 
     #[account(mut)]
-    pub market: Account<'info, Market>, // market account
+    pub market: Account<'info, Market>,
 
     #[account(
-        address = market.outcome_yes_mint // this check is for checking check_mint pass by frontend this is same as check_mint that is inside the market acccount .
-        // using this check no one pass fake yes tokens
+        address = market.outcome_yes_mint @ MarketError::InvalidMintMatch
     )]
-    pub yes_mint: Box<Account<'info, Mint>>, // total supply and decimals
+    pub yes_mint: Box<Account<'info, Mint>>,
 
     #[account(
-        address = market.outcome_no_mint
+        address = market.outcome_no_mint @ MarketError::InvalidMintMatch
     )]
     pub no_mint: Box<Account<'info, Mint>>,
 
-    // LP ke YES tokens (source)
-    /// user ( lp_provider ) personal wallet where yes tokens are stored
+    // LP's YES tokens (source)
     #[account(
         mut,
         associated_token::mint = yes_mint,
@@ -30,6 +29,7 @@ pub struct AddLiquidity<'info> {
     )]
     pub lp_yes_ata: Box<Account<'info, TokenAccount>>,
 
+    // LP's NO tokens (source)
     #[account(
         mut,
         associated_token::mint = no_mint,
@@ -53,18 +53,21 @@ pub struct AddLiquidity<'info> {
 
     /// CHECK: Vault authority PDA
     #[account(
-        seeds=[b"vault", market.key().as_ref()],
+        seeds = [b"vault", market.key().as_ref()],
         bump,
     )]
     pub vault_authority: UncheckedAccount<'info>,
 
-    pub token_prgram: Program<'info, Token>,
+    pub token_program: Program<'info, Token>,
 }
 
-pub fn handler(ctx: Context<AddLiquidity>, amount: u64) -> Result<()> {
-    // tranasfer yes tokens from user account to vault yes account
+pub fn add_liquidity_handler(ctx: Context<AddLiquidity>, amount: u64) -> Result<()> {
+    require!(!ctx.accounts.market.is_resolved, MarketError::MarketAlreadyResolved);
+    require!(amount > 0, MarketError::ZeroAmount);
+
+    // 1. Transfer YES tokens from LP to vault
     let transfer_yes_ctx = CpiContext::new(
-        ctx.accounts.token_prgram.to_account_info(),
+        ctx.accounts.token_program.to_account_info(),
         Transfer {
             from: ctx.accounts.lp_yes_ata.to_account_info(),
             to: ctx.accounts.vault_yes_ata.to_account_info(),
@@ -73,9 +76,9 @@ pub fn handler(ctx: Context<AddLiquidity>, amount: u64) -> Result<()> {
     );
     token::transfer(transfer_yes_ctx, amount)?;
 
-    // tranasfer no tokens from user account to vault no account
+    // 2. Transfer NO tokens from LP to vault
     let transfer_no_ctx = CpiContext::new(
-        ctx.accounts.token_prgram.to_account_info(),
+        ctx.accounts.token_program.to_account_info(),
         Transfer {
             from: ctx.accounts.lp_no_ata.to_account_info(),
             to: ctx.accounts.vault_no_ata.to_account_info(),
@@ -85,7 +88,7 @@ pub fn handler(ctx: Context<AddLiquidity>, amount: u64) -> Result<()> {
     token::transfer(transfer_no_ctx, amount)?;
 
     msg!(
-        "Liquidity added {} yes and {} no token in the pool",
+        "Liquidity added: {} YES and {} NO tokens in the pool",
         amount,
         amount
     );
