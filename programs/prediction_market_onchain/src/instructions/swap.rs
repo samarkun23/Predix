@@ -1,6 +1,6 @@
+use crate::errors::MarketError;
 use crate::state::Market;
 use anchor_lang::prelude::*;
-use anchor_lang::Accounts;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
 #[derive(Accounts)]
@@ -13,43 +13,41 @@ pub struct Swap<'info> {
 
     #[account(
         mut,
-        address = market.outcome_yes_mint
+        address = market.outcome_yes_mint @ MarketError::InvalidMintMatch
     )]
     pub outcome_yes_mint: Box<Account<'info, Mint>>,
 
     #[account(
         mut,
-        address = market.outcome_no_mint
+        address = market.outcome_no_mint @ MarketError::InvalidMintMatch
     )]
     pub outcome_no_mint: Box<Account<'info, Mint>>,
 
-    // token which users gives
+    // Token which user gives
     #[account(mut)]
     pub user_source_ata: Box<Account<'info, TokenAccount>>,
 
-    // token which users receives
+    // Token which user receives
     #[account(mut)]
     pub user_destination_ata: Box<Account<'info, TokenAccount>>,
 
-    // vault source ATA
+    // Vault source ATA
     #[account(
         mut,
-        constraint = vault_source_ata.mint == user_source_ata.mint,
+        constraint = vault_source_ata.mint == user_source_ata.mint @ MarketError::InvalidMintMatch,
     )]
     pub vault_source_ata: Box<Account<'info, TokenAccount>>,
 
-    // vault destination ATA
+    // Vault destination ATA
     #[account(
         mut,
-        constraint = vault_destination_ata.mint == user_destination_ata.mint,
+        constraint = vault_destination_ata.mint == user_destination_ata.mint @ MarketError::InvalidMintMatch,
     )]
     pub vault_destination_ata: Box<Account<'info, TokenAccount>>,
 
-    // check vault authorithy PDA
     /// CHECK: This PDA is only used as the signing authority for the vault token accounts.
-    /// It is securely derived from the market's key and verified by the seeds constraint below.
     #[account(
-        seeds=[b"vault", market.key().as_ref()],
+        seeds = [b"vault", market.key().as_ref()],
         bump
     )]
     pub vault_authority: UncheckedAccount<'info>,
@@ -57,59 +55,45 @@ pub struct Swap<'info> {
     pub token_program: Program<'info, Token>,
 }
 
-#[error_code]
-pub enum CustomError {
-    #[msg("Market is already resolved")]
-    MarketAlreadyResolved,
-    #[msg("Insufficient liquidity in pool")]
-    InsufficientLiquidity,
-    #[msg("Calculated amount is too low")]
-    AmountOutTooLow,
-    #[msg("Math operation overflow")]
-    MathOverflow,
-}
-
-pub fn handler(ctx: Context<Swap>, amount_in: u64) -> Result<()> {
+pub fn swap_handler(ctx: Context<Swap>, amount_in: u64) -> Result<()> {
     let market = &ctx.accounts.market;
 
-    // check market resolve
-    require!(!market.is_resolved, CustomError::MarketAlreadyResolved);
+    require!(!market.is_resolved, MarketError::MarketAlreadyResolved);
+    require!(amount_in > 0, MarketError::ZeroAmount);
 
-    // reserves (balance of inside of vault, not mint supply)
     let reserve_in = &ctx.accounts.vault_source_ata;
     let reserve_out = &ctx.accounts.vault_destination_ata;
 
     require!(
         reserve_in.amount > 0 && reserve_out.amount > 0,
-        CustomError::InsufficientLiquidity
+        MarketError::InsufficientLiquidity
     );
 
-    // AMM Math: constant product ( x * y = k ) with 0.3% fee so amount_in_with_fee = amount_in * 997 / 1000
+    // AMM Math: constant product (x * y = k) with 0.3% fee: amount_in_with_fee = amount_in * 997 / 1000
     let amount_in_with_fee = amount_in
         .checked_mul(997)
-        .ok_or(CustomError::MathOverflow)?
+        .ok_or(MarketError::MathOverflow)?
         .checked_div(1000)
-        .ok_or(CustomError::MathOverflow)?;
+        .ok_or(MarketError::MathOverflow)?;
 
     // amount_out = (reserve_out * amount_in_with_fee) / (reserve_in + amount_in_with_fee)
-
     let numerator = reserve_out
         .amount
         .checked_mul(amount_in_with_fee)
-        .ok_or(CustomError::MathOverflow)?;
+        .ok_or(MarketError::MathOverflow)?;
 
     let denominator = reserve_in
         .amount
         .checked_add(amount_in_with_fee)
-        .ok_or(CustomError::MathOverflow)?;
+        .ok_or(MarketError::MathOverflow)?;
 
     let amount_out = numerator
         .checked_div(denominator)
-        .ok_or(CustomError::MathOverflow)?;
+        .ok_or(MarketError::MathOverflow)?;
 
-    require!(amount_out > 0, CustomError::AmountOutTooLow);
+    require!(amount_out > 0, MarketError::AmountOutTooLow);
 
-    // CPI : Transfer from user to vault
+    // CPI: Transfer from user to vault
     let transfer_in_ctx = CpiContext::new(
         ctx.accounts.token_program.to_account_info(),
         Transfer {
@@ -120,11 +104,12 @@ pub fn handler(ctx: Context<Swap>, amount_in: u64) -> Result<()> {
     );
     token::transfer(transfer_in_ctx, amount_in)?;
 
-    // CPI : Transfer token from vault to user
+    // CPI: Transfer from vault to user
     let market_key = ctx.accounts.market.key();
     let vault_bump = ctx.bumps.vault_authority;
     let vault_seeds = &[b"vault", market_key.as_ref(), &[vault_bump]];
     let signer = &[&vault_seeds[..]];
+
     let transfer_out_ctx = CpiContext::new_with_signer(
         ctx.accounts.token_program.to_account_info(),
         Transfer {
@@ -134,7 +119,6 @@ pub fn handler(ctx: Context<Swap>, amount_in: u64) -> Result<()> {
         },
         signer,
     );
-
     token::transfer(transfer_out_ctx, amount_out)?;
 
     msg!(
