@@ -1,8 +1,10 @@
 use anchor_lang::prelude::*;
+
+pub mod errors;
 pub mod instructions;
 pub mod state;
 
-// imports
+pub use errors::*;
 pub use instructions::*;
 
 declare_id!("j3bfzTbouGfN1dUAcD81BpuzRKXt1jjqxJ86rk4ZybA");
@@ -19,7 +21,7 @@ pub mod prediction_market_onchain {
         question: String,
         oracle_source: String,
     ) -> Result<()> {
-        instructions::create_market::create_market_handler(
+        instructions::create_market_handler(
             ctx,
             market_id,
             resolution_oracle,
@@ -30,29 +32,34 @@ pub mod prediction_market_onchain {
     }
 
     pub fn mint_shares(ctx: Context<MintShares>, amount: u64) -> Result<()> {
-        instructions::mint_shares::mint_shares_handler(ctx, amount)
+        instructions::mint_shares_handler(ctx, amount)
+    }
+
+    pub fn merge_shares(ctx: Context<MergeShares>, amount: u64) -> Result<()> {
+        instructions::merge_shares_handler(ctx, amount)
     }
 
     pub fn swap(ctx: Context<Swap>, amount_in: u64) -> Result<()> {
-        instructions::swap::handler(ctx, amount_in)
+        instructions::swap_handler(ctx, amount_in)
     }
 
     pub fn add_liquidity(ctx: Context<AddLiquidity>, amount: u64) -> Result<()> {
-        instructions::add_liquidity::handler(ctx, amount)
+        instructions::add_liquidity_handler(ctx, amount)
     }
 
     pub fn resolve_market(ctx: Context<ResolveMarket>, outcome: u8) -> Result<()> {
-        instructions::resolve_market::handler(ctx, outcome)
+        instructions::resolve_market_handler(ctx, outcome)
     }
 
     pub fn dispute_market(ctx: Context<DisputeMarket>) -> Result<()> {
-        instructions::dispute_market::handler(ctx)
+        instructions::dispute_market_handler(ctx)
+    }
+
+    pub fn resolve_dispute(ctx: Context<ResolveDispute>, outcome: u8) -> Result<()> {
+        instructions::resolve_dispute_handler(ctx, outcome)
     }
 
     pub fn redeem(ctx: Context<Redeem>) -> Result<()> {
-        instructions::redeem::handler(ctx)
+        instructions::redeem_handler(ctx)
     }
 }
-
-#[derive(Accounts)]
-pub struct Initialize {}
