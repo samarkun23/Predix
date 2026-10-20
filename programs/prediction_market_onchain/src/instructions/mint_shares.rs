@@ -1,34 +1,35 @@
+use crate::errors::MarketError;
 use crate::state::Market;
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self,Mint,Token,TokenAccount, Transfer, MintTo};
 use anchor_spl::associated_token::AssociatedToken;
+use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount, Transfer};
 
 #[derive(Accounts)]
-pub struct MintShares<'info>{
+pub struct MintShares<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
 
     #[account(
         mut,
-        has_one = usdc_mint,
+        has_one = usdc_mint @ MarketError::InvalidMintMatch,
     )]
     pub market: Box<Account<'info, Market>>,
 
-    pub usdc_mint : Box<Account<'info, Mint>>,
+    pub usdc_mint: Box<Account<'info, Mint>>,
 
     #[account(
         mut, 
-        address = market.outcome_yes_mint,
+        address = market.outcome_yes_mint @ MarketError::InvalidMintMatch,
     )]
     pub yes_mint: Box<Account<'info, Mint>>,
 
     #[account(
         mut, 
-        address = market.outcome_no_mint,
+        address = market.outcome_no_mint @ MarketError::InvalidMintMatch,
     )]
     pub no_mint: Box<Account<'info, Mint>>,
 
-    // User's token accounts ;
+    // User's token accounts
     #[account(
         mut,
         associated_token::mint = usdc_mint,
@@ -52,7 +53,6 @@ pub struct MintShares<'info>{
     )]
     pub user_no_ata: Box<Account<'info, TokenAccount>>,
 
-    // Vault PDA (Ye sirf ek authority ke taur par act karega)
     /// CHECK: This PDA is only used as the authority of the vault token account.
     #[account(
         seeds = [b"vault", market.key().as_ref()],
@@ -69,69 +69,65 @@ pub struct MintShares<'info>{
 
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
-
-    pub system_program: Program<'info, System>
+    pub system_program: Program<'info, System>,
 }
 
 pub fn mint_shares_handler(ctx: Context<MintShares>, amount: u64) -> Result<()> {
+    require!(!ctx.accounts.market.is_resolved, MarketError::MarketAlreadyResolved);
+    require!(amount > 0, MarketError::ZeroAmount);
 
-        let market = &ctx.accounts.market;
+    let market = &ctx.accounts.market;
 
-        // 1. Transfer USDC from user to vault.
-        let cpi_ctx = CpiContext::new(
-            ctx.accounts.token_program.to_account_info(),
-            Transfer {
-                from: ctx.accounts.user_usdc_ata.to_account_info(),
-                to: ctx.accounts.vault_usdc_ata.to_account_info(),
-                authority: ctx.accounts.user.to_account_info(),
-            },
-        );
-        token::transfer(cpi_ctx, amount)?;
+    // 1. Transfer USDC from user to vault
+    let cpi_ctx = CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        Transfer {
+            from: ctx.accounts.user_usdc_ata.to_account_info(),
+            to: ctx.accounts.vault_usdc_ata.to_account_info(),
+            authority: ctx.accounts.user.to_account_info(),
+        },
+    );
+    token::transfer(cpi_ctx, amount)?;
 
-        let market_id_bytes = market.market_id.to_le_bytes();
-        // 2. Sign as a market pda by providing seeds bec pdas can't have private keys
-        let market_seeds= &[
-            b"market",
-            market.admin.as_ref(),
-            &market_id_bytes.as_ref(),
-            &[market.bump],
-        ];
-        let signer_seeds = &[&market_seeds[..]];
+    let market_id_bytes = market.market_id.to_le_bytes();
+    let market_seeds = &[
+        b"market",
+        market.admin.as_ref(),
+        market_id_bytes.as_ref(),
+        &[market.bump],
+    ];
+    let signer_seeds = &[&market_seeds[..]];
 
-        // Mint yes tokens
-        let mint_yes_ctx = CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(),
-            MintTo{
-                mint: ctx.accounts.yes_mint.to_account_info(),
-                to: ctx.accounts.user_yes_ata.to_account_info(),
-                authority: ctx.accounts.market.to_account_info()
-            },
+    // 2. Mint YES tokens to user
+    let mint_yes_ctx = CpiContext::new_with_signer(
+        ctx.accounts.token_program.to_account_info(),
+        MintTo {
+            mint: ctx.accounts.yes_mint.to_account_info(),
+            to: ctx.accounts.user_yes_ata.to_account_info(),
+            authority: ctx.accounts.market.to_account_info(),
+        },
+        signer_seeds,
+    );
+    token::mint_to(mint_yes_ctx, amount)?;
 
-            signer_seeds
-        );
+    // 3. Mint NO tokens to user
+    let mint_no_ctx = CpiContext::new_with_signer(
+        ctx.accounts.token_program.to_account_info(),
+        MintTo {
+            mint: ctx.accounts.no_mint.to_account_info(),
+            to: ctx.accounts.user_no_ata.to_account_info(),
+            authority: ctx.accounts.market.to_account_info(),
+        },
+        signer_seeds,
+    );
+    token::mint_to(mint_no_ctx, amount)?;
 
-        token::mint_to(mint_yes_ctx, amount)?;
+    msg!(
+        "Successfully minted {} YES and {} NO tokens for {} USDC",
+        amount,
+        amount,
+        amount
+    );
 
-        // mint no tokens 
-        let mint_no_ctx = CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(),
-            MintTo{
-                mint: ctx.accounts.no_mint.to_account_info(),
-                to: ctx.accounts.user_no_ata.to_account_info(),
-                authority: ctx.accounts.market.to_account_info()
-            },
-            signer_seeds
-        );
-
-        token::mint_to(mint_no_ctx, amount)?;
-
-        msg!(
-            "Successfully minted {} YES and {} NO tokens for {} USDC",
-            amount,
-            amount,
-            amount
-        );
-
-        Ok(())
-
-    } 
+    Ok(())
+}
