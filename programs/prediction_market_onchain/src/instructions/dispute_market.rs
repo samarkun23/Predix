@@ -1,20 +1,6 @@
+use crate::errors::MarketError;
 use crate::state::Market;
 use anchor_lang::prelude::*;
-
-#[error_code]
-pub enum CustomError {
-    // ... purane errors ...
-    #[msg("Market is not resolved yet")]
-    MarketNotResolved,
-    #[msg("Dispute window is closed")]
-    DisputeWindowClosed,
-    #[msg("Market is already disputed")]
-    AlreadyDisputed,
-    #[msg("Dispute window is still open, please wait")]
-    DisputeWindowOpen,
-    #[msg("Market is disputed, funds frozen for V2 governance")]
-    MarketDisputed,
-}
 
 #[derive(Accounts)]
 pub struct DisputeMarket<'info> {
@@ -25,22 +11,22 @@ pub struct DisputeMarket<'info> {
     pub market: Box<Account<'info, Market>>,
 }
 
-pub fn handler(ctx: Context<DisputeMarket>) -> Result<()> {
+pub fn dispute_market_handler(ctx: Context<DisputeMarket>) -> Result<()> {
     let market = &mut ctx.accounts.market;
 
-    require!(market.is_resolved, CustomError::MarketNotResolved);
-    require!(!market.is_disputed, CustomError::AlreadyDisputed);
+    require!(market.is_resolved, MarketError::MarketNotResolved);
+    require!(!market.is_disputed, MarketError::AlreadyDisputed);
 
     require!(
         Clock::get()?.unix_timestamp < market.dispute_deadline,
-        CustomError::DisputeWindowClosed
+        MarketError::DisputeWindowClosed
     );
 
     market.is_disputed = true;
-    market.disputed_count += 1;
+    market.disputed_count = market.disputed_count.saturating_add(1);
 
     msg!(
-        "Market {} disputed by {} . Pool forzen for v2 governance.",
+        "Market {} disputed by {}. Market frozen until dispute resolution.",
         market.market_id,
         ctx.accounts.disputer.key()
     );
