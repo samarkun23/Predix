@@ -41,6 +41,18 @@ export const getProgram = (
     return new Program(fixedIdl as any, provider as any) as any;
 };
 
+export const getReadOnlyProgram = () => {
+    const dummyWallet = {
+        publicKey: PublicKey.default,
+        signTransaction: async (tx: any) => tx,
+        signAllTransactions: async (txs: any) => txs,
+    };
+    const provider = new AnchorProvider(connection, dummyWallet as any, {
+        commitment: "confirmed",
+    });
+    return new Program(fixedIdl as any, provider as any) as any;
+};
+
 export const getVaultAuthority = (marketPda: PublicKey) => {
     const [vaultAuthorityPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("vault"), marketPda.toBuffer()],
