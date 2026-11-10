@@ -12,7 +12,7 @@ const NAV_LINKS = [
   { label: 'MARKETS', href: '/' },
   { label: 'PORTFOLIO', href: '/portfolio' },
   { label: 'CREATE', href: '/create' },
-  { label: 'DOCS', href: '#' },
+  { label: 'DOCS', href: '/docs' },
 ]
 
 interface NavbarProps {
