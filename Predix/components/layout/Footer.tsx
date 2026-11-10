@@ -1,8 +1,8 @@
 import Link from 'next/link'
 
 const FOOTER_LINKS = [
-  { label: 'DOCS', href: '#' },
-  { label: 'GITHUB', href: '#' },
+  { label: 'DOCS', href: '/docs' },
+  { label: 'GITHUB', href: 'https://github.com' },
   { label: 'DISCORD', href: '#' },
   { label: 'TERMS', href: '#' },
 ]
