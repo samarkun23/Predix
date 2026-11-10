@@ -1,117 +1,143 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { useWallet } from '@solana/wallet-adapter-react'
-import { PublicKey } from '@solana/web3.js'
+import { Connection, PublicKey } from '@solana/web3.js'
+import { getAssociatedTokenAddressSync } from '@solana/spl-token'
 import { getProgram } from '@/lib/anchor'
 import MarketDetailView from '@/components/market-detail/MarketDetailView'
-import { getPriceHistory, getRecentSwaps, getPoolState, getSentiment } from '@/lib/data'
+import { getPriceHistory, getRecentSwaps, getSentiment } from '@/lib/data'
+
+const SAFE_PROGRAM_ID = new PublicKey('j3bfzTbouGfN1dUAcD81BpuzRKXt1jjqxJ86rk4ZybA')
 
 export default function MarketPage() {
   const params = useParams()
   const { publicKey, signTransaction, signAllTransactions } = useWallet()
-  
+
   const [market, setMarket] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
   const [pool, setPool] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    const fetchMarket = async () => {
-      // Agar wallet connect nahi hai ya ID nahi hai, toh wait karo
-      if (!params.id || !publicKey || !signTransaction || !signAllTransactions) {
-        setLoading(false)
-        return
-      }
-
-      try {
-        const program = getProgram(publicKey, signTransaction, signAllTransactions)
-        const marketPubkey = new PublicKey(params.id as string)
-        
-        //  1. Seedha Blockchain se real data fetch karo
-        const account = await (program.account as any).market.fetch(marketPubkey)
-
-        // vault balance
-        const connection = program.provider.connection
-
-        const vaultYesBalance = await connection.getTokenAccountBalance(account.vaultYes)
-        const vaultNoBalance = await connection.getTokenAccountBalance(account.vaultNo)
-
-        const yesReserves = Number(vaultYesBalance.value.amount) / 1_000_000
-        const noReserves = Number(vaultNoBalance.value.amount) / 1_000_000
-
-        // total tvl and price
-        const totalTVL = yesReserves + noReserves
-        const yesPrice = totalTVL > 0 ? (yesReserves / totalTVL) * 100 : 0
-        const noPrice = totalTVL > 0 ? (noReserves / totalTVL) * 100 : 0
-
-        //  2. Blockchain data ko tumhare 'Market' type ke format mein adapt karo
-        const adaptedMarket = {
-          id: params.id as string,
-          account, 
-          question: account.question,
-          category: 'crypto', // V1 mein on-chain category nahi hai, default 'crypto' rakho
-          resolutionDate: new Date(account.resolutionTime.toNumber() * 1000).toISOString(),
-          isResolved: account.isResolved,
-          isDisputed: account.isDisputed,
-          winningOutcome: account.winningOutcome,
-          oracleSource: account.oracleSource,
-          // Agar tumhare MarketDetailView mein aur fields chahiye (jaise volume), toh yahan dummy values daal sakte ho
-          volume24h: 0,
-          yesPrice: yesPrice,
-          noPrice: noPrice,
-        }
-
-        const realPoolState = {
-          yesReserves: yesReserves,
-          noReserves: noReserves,
-          totalTVL: totalTVL,
-          swapFee: 0.003,
-          yesPrice: yesPrice,
-          noPrice: noPrice,
-          feeBps: 30,
-        }
-
-        setMarket(adaptedMarket)
-        setPool(realPoolState)
-      } catch (error) {
-        console.error('Failed to fetch market from blockchain:', error)
-      } finally {
-        setLoading(false)
-      }
+  const fetchMarket = useCallback(async () => {
+    if (!params.id || !publicKey || !signTransaction || !signAllTransactions) {
+      setLoading(false)
+      return
     }
 
-    fetchMarket()
+    try {
+      const program = getProgram(publicKey, signTransaction, signAllTransactions)
+      const marketPubkey = new PublicKey(params.id as string)
+
+      // Fetch on-chain account data
+      const account = await (program.account as any).market.fetch(marketPubkey)
+
+      // Fetch vault balances directly (vault authority PDA → ATA)
+      const connection = new Connection('https://api.devnet.solana.com', 'confirmed')
+      const vaultAuthority = PublicKey.findProgramAddressSync(
+        [Buffer.from('vault'), marketPubkey.toBuffer()],
+        SAFE_PROGRAM_ID
+      )[0]
+
+      const yesMint = new PublicKey(account.outcomeYesMint)
+      const noMint = new PublicKey(account.outcomeNoMint)
+
+      const vaultYesAta = getAssociatedTokenAddressSync(yesMint, vaultAuthority, true)
+      const vaultNoAta = getAssociatedTokenAddressSync(noMint, vaultAuthority, true)
+
+      let yesReserves = 0
+      let noReserves = 0
+
+      try {
+        const yesBalance = await connection.getTokenAccountBalance(vaultYesAta)
+        yesReserves = Number(yesBalance.value.amount) / 1_000_000
+      } catch (_) {}
+
+      try {
+        const noBalance = await connection.getTokenAccountBalance(vaultNoAta)
+        noReserves = Number(noBalance.value.amount) / 1_000_000
+      } catch (_) {}
+
+      const totalTVL = yesReserves + noReserves
+
+      // Correct CPMM pricing: YES price = noReserve / total
+      const yesPrice = totalTVL > 0 ? (noReserves / totalTVL) * 100 : 50
+
+      const adaptedMarket = {
+        id: params.id as string,
+        account,
+        question: account.question,
+        category: 'crypto',
+        resolutionDate: new Date(account.resolutionTime.toNumber() * 1000).toISOString(),
+        isResolved: account.isResolved,
+        isDisputed: account.isDisputed,
+        winningOutcome: account.winningOutcome,
+        oracleSource: account.oracleSource,
+        yesPrice,
+        noPrice: 100 - yesPrice,
+        volume24h: 0,
+      }
+
+      const realPoolState = {
+        yesReserve: yesReserves,   // PoolState field names (singular)
+        noReserve: noReserves,
+        totalTVL,
+        feeBps: 30,
+        lpProviders: 0,
+      }
+
+      setMarket(adaptedMarket)
+      setPool(realPoolState)
+    } catch (error) {
+      console.error('Failed to fetch market from blockchain:', error)
+    } finally {
+      setLoading(false)
+    }
   }, [params.id, publicKey, signTransaction, signAllTransactions])
 
-  // Loading State
+  useEffect(() => {
+    fetchMarket()
+  }, [fetchMarket])
+
+  // ── Loading ──
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0a0a0f] text-white flex items-center justify-center">
-        <p className="text-xl text-textDim animate-pulse">Loading market from blockchain...</p>
+        <div className="flex flex-col items-center gap-3">
+          <span className="h-2 w-2 rounded-full bg-cyan animate-pulse-dot" />
+          <p className="text-sm text-textDim animate-pulse">Loading market from blockchain...</p>
+        </div>
       </div>
     )
   }
 
-  // Not Found State (Agar blockchain par bhi ye ID nahi mili)
+  // ── Wallet not connected ──
+  if (!publicKey) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0f] text-white flex flex-col items-center justify-center gap-4">
+        <p className="text-textDim text-sm">Connect your wallet to view this market.</p>
+      </div>
+    )
+  }
+
+  // ── Not found ──
   if (!market) {
     return (
       <div className="min-h-screen bg-[#0a0a0f] text-white flex flex-col items-center justify-center gap-4">
         <h1 className="text-2xl font-bold text-red">Market Not Found</h1>
-        <a href="/" className="text-cyan hover:underline">← Back to Markets</a>
+        <a href="/" className="text-cyan hover:underline text-sm">← Back to Markets</a>
       </div>
     )
   }
 
-  // ✅ Success State: Apna original MarketDetailView render karo!
   return (
     <MarketDetailView
       market={market}
-      // V1 ke liye chart/swaps mock data use karenge, lekin 'market' prop 100% real on-chain data hai!
-      priceHistory={getPriceHistory(market.id) || []}
-      swaps={getRecentSwaps(market.id) || []}
-      pool={pool || { yesReserves: 0, noReserves: 0, totalTVL: 0, swapFee: 0.003}}
-      sentiment={{fearGreedScore: 50, signals: [], buyYesFlowPct: 50}}
+      priceHistory={getPriceHistory(market.id, market.yesPrice) || []}
+      swaps={getRecentSwaps(market.id, market.yesPrice) || []}
+      pool={pool || { yesReserve: 0, noReserve: 0, totalTVL: 0, feeBps: 30, lpProviders: 0 }}
+      sentiment={getSentiment(market.id) || { fearGreedScore: 50, signals: [], buyYesFlowPct: 50 }}
+      onRefresh={fetchMarket}
     />
   )
 }
