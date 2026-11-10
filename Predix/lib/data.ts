@@ -88,7 +88,7 @@ export const stats: Stat[] = [
   { id: 'tvl', label: 'TOTAL_VALUE_LOCKED', value: '$4.28M', accent: 'green' },
   { id: 'markets', label: 'MARKETS_ON_CHAIN', value: '312', accent: 'cyan' },
   { id: 'wallets', label: 'WALLETS_TRADED', value: '18,904', accent: 'pink' },
-  { id: 'program', label: 'PROGRAM_ID', value: 'SoLM4rkExGqz9Y2vJp7Rk8W3cVn6Tz1QeAx5uBh2Fd', accent: 'purple' },
+  { id: 'program', label: 'PROGRAM_ID', value: 'j3bfzTbouGfN1dUAcD81BpuzRKXt1jjqxJ86rk4ZybA', accent: 'purple' },
 ]
 
 export const trustPoints: TrustPoint[] = [
@@ -129,31 +129,93 @@ function hashSeed(id: string): number {
   return h + 1
 }
 
+export type ChartRange = '1H' | '1D' | '1W' | 'ALL'
+
 export function generatePriceHistory(
   basePrice: number,
   points = 60,
-  seed = 42
+  seed = 42,
+  range: ChartRange = '1D'
 ): PricePoint[] {
   const rand = seededRandom(seed)
   const history: PricePoint[] = []
-  let price = basePrice
-  for (let i = 0; i < points; i++) {
-    const drift = (rand() - 0.5) * 4
-    price = Math.min(96, Math.max(4, price + drift))
-    history.push({ t: i, price: Math.round(price * 10) / 10 })
+
+  // Compute time intervals based on range
+  const now = Date.now()
+  let intervalMs = 60 * 1000 // default 1 min for 1H
+  let formatTime = (ts: number) => {
+    const d = new Date(ts)
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
   }
+
+  if (range === '1H') {
+    points = 60
+    intervalMs = 60 * 1000 // 1 minute
+  } else if (range === '1D') {
+    points = 48
+    intervalMs = 30 * 60 * 1000 // 30 mins
+  } else if (range === '1W') {
+    points = 56
+    intervalMs = 3 * 3600 * 1000 // 3 hours
+    formatTime = (ts: number) => {
+      const d = new Date(ts)
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+      return `${months[d.getMonth()]} ${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:00`
+    }
+  } else if (range === 'ALL') {
+    points = 60
+    intervalMs = 12 * 3600 * 1000 // 12 hours
+    formatTime = (ts: number) => {
+      const d = new Date(ts)
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+      return `${months[d.getMonth()]} ${d.getDate()}`
+    }
+  }
+
+  // Work backwards from basePrice so the latest point matches current live price
+  const prices: number[] = [basePrice]
+  let current = basePrice
+  const maxDrift = range === '1H' ? 1.5 : range === '1D' ? 3.0 : 5.0
+
+  for (let i = 1; i < points; i++) {
+    const drift = (rand() - 0.49) * maxDrift
+    current = Math.min(97, Math.max(3, current - drift))
+    prices.unshift(Math.round(current * 10) / 10)
+  }
+
+  const startTime = now - (points - 1) * intervalMs
+
+  for (let i = 0; i < points; i++) {
+    const timestamp = startTime + i * intervalMs
+    history.push({
+      t: i,
+      price: prices[i],
+      time: formatTime(timestamp),
+      timestamp,
+    })
+  }
+
   return history
 }
 
-// Per-market price history, keyed by market id.
+// Per-market price history, keyed by market id + range + basePrice.
 const priceHistoryCache = new Map<string, PricePoint[]>()
-export function getPriceHistory(marketId: string): PricePoint[] {
-  if (!priceHistoryCache.has(marketId)) {
-    const market = getMarketById(marketId)
-    const base = market?.yesProbability ?? 50
-    priceHistoryCache.set(marketId, generatePriceHistory(base, 60, hashSeed(marketId)))
+export function getPriceHistory(
+  marketId: string,
+  currentPrice?: number,
+  range: ChartRange = '1D'
+): PricePoint[] {
+  const market = getMarketById(marketId)
+  const base = currentPrice !== undefined && !isNaN(currentPrice) && currentPrice > 0
+    ? currentPrice
+    : (market?.yesProbability ?? 50)
+
+  const cacheKey = `${marketId}-${range}-${Math.round(base * 10)}`
+  if (!priceHistoryCache.has(cacheKey)) {
+    const seed = hashSeed(marketId) + (range === '1H' ? 101 : range === '1D' ? 202 : range === '1W' ? 303 : 404)
+    priceHistoryCache.set(cacheKey, generatePriceHistory(base, 60, seed, range))
   }
-  return priceHistoryCache.get(marketId)!
+  return priceHistoryCache.get(cacheKey)!
 }
 
 // Per-market AMM pool state, derived from the market's mock pooledUsd / yesProbability
@@ -173,9 +235,12 @@ export function getPoolState(marketId: string): PoolState {
 
 // Per-market recent swaps (mock activity feed), keyed by market id.
 const SWAP_SIDES: SwapSide[] = ['buy_yes', 'sell_yes', 'buy_no', 'sell_no']
-export function getRecentSwaps(marketId: string): Swap[] {
+export function getRecentSwaps(marketId: string, currentPrice?: number): Swap[] {
   const market = getMarketById(marketId)
-  const basePrice = (market?.yesProbability ?? 50) / 100
+  const basePrice = currentPrice !== undefined && !isNaN(currentPrice) && currentPrice > 0
+    ? currentPrice / 100
+    : (market?.yesProbability ?? 50) / 100
+
   const rand = seededRandom(hashSeed(marketId) + 17)
   const swaps: Swap[] = []
   let hour = 14
