@@ -4,11 +4,11 @@ export interface Market {
   id: string
   category: MarketCategory
   question: string
-  yesProbability: number // 0-100
-  pooledUsd: number
-  endsInDays: number
-  resolutionDate: any,
-  account: any
+  yesProbability?: number // 0-100
+  pooledUsd?: number
+  endsInDays?: number
+  resolutionDate?: any
+  account?: any
 }
 
 export interface Stat {
@@ -27,6 +27,8 @@ export interface TrustPoint {
 export interface PricePoint {
   t: number
   price: number
+  time?: string
+  timestamp?: number
 }
 
 export type SwapSide = 'buy_yes' | 'sell_yes' | 'buy_no' | 'sell_no'
@@ -43,8 +45,8 @@ export interface PoolState {
   yesReserve: number // USDC value on the YES side of the pool
   noReserve: number // USDC value on the NO side of the pool
   feeBps: number // swap fee in basis points, e.g. 30 = 0.30%
-  lpProviders: number // number of wallets that have provided liquidity
-  totalTVL: number
+  lpProviders?: number // number of wallets that have provided liquidity
+  totalTVL?: number
 }
 
 export type PositionStatus = 'open' | 'resolved-won' | 'resolved-lost'
@@ -58,4 +60,5 @@ export interface Position {
   currentPrice: number
   sizeUsd: number
   status: PositionStatus
+  shares?: number
 }
