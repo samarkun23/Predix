@@ -10,7 +10,7 @@ Predix is a fully on-chain prediction market protocol built on Solana using the 
 
 | | |
 |---|---|
-| **Frontend** | [https://predix-git-main-samarkuns-projects.vercel.app/](https://predix-git-main-samarkuns-projects.vercel.app/) *(update with your Vercel URL)* |
+| **Frontend** | [https://predix-git-main-samarkuns-projects.vercel.app/](https://predix-git-main-samarkuns-projects.vercel.app/)  |
 | **Network** | Solana **Devnet** |
 | **Program ID** | `j3bfzTbouGfN1dUAcD81BpuzRKXt1jjqxJ86rk4ZybA` |
 
