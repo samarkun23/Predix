@@ -4,7 +4,9 @@ import './globals.css'
 import Navbar from '@/components/layout/Navbar'
 import Footer from '@/components/layout/Footer'
 import {WalletProvider} from '@/components/providers/WalletProvider'
+import { Buffer } from 'buffer'
 
+globalThis.Buffer = Buffer;
 const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],

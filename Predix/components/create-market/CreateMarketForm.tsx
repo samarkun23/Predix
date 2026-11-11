@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import * as anchor from '@coral-xyz/anchor'
 import type { MarketCategory } from '@/lib/types'
 import QuestionField from '@/components/create-market/QuestionField'
@@ -22,14 +23,16 @@ function daysUntil(dateStr: string): number {
 }
 
 export default function CreateMarketForm() {
-  const { publicKey, signTransaction , signAllTransactions} = useWallet()
+  const router = useRouter()
+  const { publicKey, signTransaction, signAllTransactions } = useWallet()
 
   const [question, setQuestion] = useState('')
   const [category, setCategory] = useState<MarketCategory>('crypto')
   const [resolutionDate, setResolutionDate] = useState('')
-  const [liquidity, setLiquidity] = useState('')
+  const [liquidity, setLiquidity] = useState('10')
   const [oracleSource, setOracleSource] = useState('')
   const [successTx, setSuccessTx] = useState<string | null>(null)
+  const [statusMsg, setStatusMsg] = useState<string | null>(null)
 
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -45,43 +48,45 @@ export default function CreateMarketForm() {
   async function handleSubmit() {
     if (!isValid || !publicKey || !signTransaction || !signAllTransactions) {
       setError('Please connect your wallet and fill all fields.')
-      return;
+      return
     }
 
     setIsLoading(true)
     setError(null)
+    setStatusMsg('Creating market on Solana...')
 
     try {
-      const program = getProgram(publicKey, signTransaction, signAllTransactions);
+      const program = getProgram(publicKey, signTransaction, signAllTransactions)
 
-      // inputs
-      const marketId = new anchor.BN(Date.now());
-      const resolutionTime = new anchor.BN(Math.floor(new Date(resolutionDate).getTime() / 1000));
-      const questionString = question.trim();
+      const marketId = new anchor.BN(Date.now())
+      const resolutionTime = new anchor.BN(Math.floor(new Date(resolutionDate).getTime() / 1000))
+      const questionString = question.trim()
 
-      // catagory with orcale string 
-      const categoryTag = ` | C:${category}`;
-      const oracleSourceString = oracleSource.trim().length > 0 ? oracleSource.trim() + categoryTag : `Manual Resolution${categoryTag}`;
+      // Standardize category tag so home page filter matches
+      const categoryTag = ` | CAT:${category}`
+      const oracleSourceString =
+        oracleSource.trim().length > 0
+          ? oracleSource.trim() + categoryTag
+          : `Manual Resolution${categoryTag}`
 
-
-      // PDA & keypair
+      // PDA & keypairs
       const [marketPda] = PublicKey.findProgramAddressSync(
         [Buffer.from('market'), publicKey.toBuffer(), marketId.toArrayLike(Buffer, 'le', 8)],
         program.programId
-      );
-      const vaultAuthority = getVaultAuthority(marketPda);
-      const yesMintKeypair = Keypair.generate();
-      const noMintKeypair = Keypair.generate();
+      )
+      const vaultAuthority = getVaultAuthority(marketPda)
+      const yesMintKeypair = Keypair.generate()
+      const noMintKeypair = Keypair.generate()
 
-      // devnet usdc mint address 
-      const usdcMint = new anchor.web3.PublicKey('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU');
+      // Devnet USDC mint address
+      const usdcMint = new PublicKey('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU')
 
-      // vault atas
-      const vaultUsdcAta = getAssociatedTokenAddressSync(usdcMint, vaultAuthority, true);
-      const vaultYesAta = getAssociatedTokenAddressSync(yesMintKeypair.publicKey, vaultAuthority, true);
-      const vaultNoAta = getAssociatedTokenAddressSync(noMintKeypair.publicKey, vaultAuthority, true);
+      // Vault ATAs
+      const vaultUsdcAta = getAssociatedTokenAddressSync(usdcMint, vaultAuthority, true)
+      const vaultYesAta = getAssociatedTokenAddressSync(yesMintKeypair.publicKey, vaultAuthority, true)
+      const vaultNoAta = getAssociatedTokenAddressSync(noMintKeypair.publicKey, vaultAuthority, true)
 
-      // trx build and send 
+      // 1. Create Market transaction
       const tx = await program.methods
         .createMarket(
           marketId,
@@ -105,21 +110,76 @@ export default function CreateMarketForm() {
           associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         })
         .signers([yesMintKeypair, noMintKeypair])
-        .rpc();
+        .rpc()
 
-        console.log('Market created with tx:', tx)
-        setSuccessTx(tx)
+      console.log('✅ Market created on-chain:', tx)
+      setSuccessTx(tx)
 
-        // form reset
-        setQuestion('')
-        setResolutionDate('')
-        setLiquidity('')
-        setOracleSource('')
+      // 2. Deposit Initial Liquidity if specified
+      const initialLiquidityNum = parseFloat(liquidity)
+      if (initialLiquidityNum > 0) {
+        setStatusMsg('Depositing initial liquidity to pool...')
+        const liquidityAmount = new anchor.BN(initialLiquidityNum * 1_000_000)
 
-    } catch (err) {
-      console.error('Error creating market:', err) 
-      setError('An error occurred while creating the market.')
-    }finally{
+        const userUsdcAta = getAssociatedTokenAddressSync(usdcMint, publicKey)
+        const userYesAta = getAssociatedTokenAddressSync(yesMintKeypair.publicKey, publicKey)
+        const userNoAta = getAssociatedTokenAddressSync(noMintKeypair.publicKey, publicKey)
+
+        try {
+          // Mint shares with USDC
+          await program.methods
+            .mintShares(liquidityAmount)
+            .accounts({
+              user: publicKey,
+              market: marketPda,
+              usdcMint: usdcMint,
+              yesMint: yesMintKeypair.publicKey,
+              noMint: noMintKeypair.publicKey,
+              userUsdcAta: userUsdcAta,
+              userYesAta: userYesAta,
+              userNoAta: userNoAta,
+              vaultAuthority: vaultAuthority,
+              vaultUsdcAta: vaultUsdcAta,
+              tokenProgram: TOKEN_PROGRAM_ID,
+              associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+              systemProgram: SystemProgram.programId,
+            })
+            .rpc()
+
+          // Deposit shares into AMM pool
+          await program.methods
+            .addLiquidity(liquidityAmount)
+            .accounts({
+              lpProvider: publicKey,
+              market: marketPda,
+              yesMint: yesMintKeypair.publicKey,
+              noMint: noMintKeypair.publicKey,
+              lpYesAta: userYesAta,
+              lpNoAta: userNoAta,
+              vaultYesAta: vaultYesAta,
+              vaultNoAta: vaultNoAta,
+              vaultAuthority: vaultAuthority,
+              tokenProgram: TOKEN_PROGRAM_ID,
+            })
+            .rpc()
+
+          console.log(`✅ Deposited ${initialLiquidityNum} USDC initial liquidity!`)
+        } catch (liqErr: any) {
+          console.warn('Initial liquidity deposit skipped or failed (insufficient Devnet USDC):', liqErr)
+        }
+      }
+
+      setStatusMsg('Redirecting to your new market...')
+
+      // Redirect creator to their new market page
+      setTimeout(() => {
+        router.push(`/markets/${marketPda.toBase58()}`)
+      }, 1500)
+
+    } catch (err: any) {
+      console.error('Error creating market:', err)
+      setError(err?.message || 'An error occurred while creating the market.')
+    } finally {
       setIsLoading(false)
     }
   }
@@ -127,9 +187,10 @@ export default function CreateMarketForm() {
   function handleDiscard() {
     setQuestion('')
     setResolutionDate('')
-    setLiquidity('')
+    setLiquidity('10')
     setOracleSource('')
     setSuccessTx(null)
+    setStatusMsg(null)
     setError(null)
   }
 
@@ -142,18 +203,24 @@ export default function CreateMarketForm() {
         <LiquidityField value={liquidity} onChange={setLiquidity} />
         <OracleSourceField value={oracleSource} onChange={setOracleSource} />
 
-        {successTx && (
-          <p className="rounded border border-green/40 bg-green/10 px-3 py-2.5 text-xs text-green">
-            &gt; MARKET_DEPLOYED · tx: {successTx.slice(0,8)}...{successTx.slice(-8)}
+        {statusMsg && (
+          <p className="rounded border border-cyan/40 bg-cyan/10 px-3 py-2.5 text-xs text-cyan flex items-center gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-cyan animate-pulse-dot" />
+            {statusMsg}
           </p>
         )}
-        {
-          error && (
-            <p className="rounded border border-red/40 bg-red/10 px-3 py-2.5 text-xs text-red">
-              &gt; ERROR · {error}
-            </p>
-          )
-        }
+
+        {successTx && (
+          <p className="rounded border border-green/40 bg-green/10 px-3 py-2.5 text-xs text-green">
+            &gt; MARKET_DEPLOYED · tx: {successTx.slice(0, 8)}...{successTx.slice(-8)}
+          </p>
+        )}
+
+        {error && (
+          <p className="rounded border border-red/40 bg-red/10 px-3 py-2.5 text-xs text-red">
+            &gt; ERROR · {error}
+          </p>
+        )}
       </div>
 
       <div className="lg:col-span-2">

@@ -420,7 +420,7 @@
           }
         },
         {
-          "name": "token_prgram",
+          "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
@@ -1628,6 +1628,97 @@
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "merge_shares",
+      "discriminator": [
+        236,
+        47,
+        171,
+        1,
+        210,
+        167,
+        204,
+        0
+      ],
+      "accounts": [
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market"
+        },
+        {
+          "name": "usdc_mint"
+        },
+        {
+          "name": "yes_mint",
+          "writable": true
+        },
+        {
+          "name": "no_mint",
+          "writable": true
+        },
+        {
+          "name": "user_usdc_ata",
+          "writable": true
+        },
+        {
+          "name": "user_yes_ata",
+          "writable": true
+        },
+        {
+          "name": "user_no_ata",
+          "writable": true
+        },
+        {
+          "name": "vault_authority"
+        },
+        {
+          "name": "vault_usdc_ata",
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "resolve_dispute",
+      "discriminator": [
+        231,
+        6,
+        202,
+        6,
+        96,
+        103,
+        12,
+        230
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "outcome",
+          "type": "u8"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -1646,23 +1737,74 @@
       "type": {
         "kind": "struct",
         "fields": [
-          { "name": "market_id", "type": "u64" },
-          { "name": "admin", "type": "pubkey" },
-          { "name": "usdc_mint", "type": "pubkey" },
-          { "name": "outcome_yes_mint", "type": "pubkey" },
-          { "name": "outcome_no_mint", "type": "pubkey" },
-          { "name": "vault_yes", "type": "pubkey" },
-          { "name": "vault_no", "type": "pubkey" },
-          { "name": "resolution_oracle", "type": "pubkey" },
-          { "name": "resolution_time", "type": "i64" },
-          { "name": "is_resolved", "type": "bool" },
-          { "name": "winning_outcome", "type": "u8" },
-          { "name": "question", "type": "string" },
-          { "name": "oracle_source", "type": "string" },
-          { "name": "dispute_deadline", "type": "i64" },
-          { "name": "is_disputed", "type": "bool" },
-          { "name": "disputed_count", "type": "u64" },
-          { "name": "bump", "type": "u8" }
+          {
+            "name": "market_id",
+            "type": "u64"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "usdc_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "outcome_yes_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "outcome_no_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "vault_yes",
+            "type": "pubkey"
+          },
+          {
+            "name": "vault_no",
+            "type": "pubkey"
+          },
+          {
+            "name": "resolution_oracle",
+            "type": "pubkey"
+          },
+          {
+            "name": "resolution_time",
+            "type": "i64"
+          },
+          {
+            "name": "is_resolved",
+            "type": "bool"
+          },
+          {
+            "name": "winning_outcome",
+            "type": "u8"
+          },
+          {
+            "name": "question",
+            "type": "string"
+          },
+          {
+            "name": "oracle_source",
+            "type": "string"
+          },
+          {
+            "name": "dispute_deadline",
+            "type": "i64"
+          },
+          {
+            "name": "is_disputed",
+            "type": "bool"
+          },
+          {
+            "name": "disputed_count",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
         ]
       }
     }
