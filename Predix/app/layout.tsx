@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import { JetBrains_Mono } from 'next/font/google'
 import './globals.css'
 import Navbar from '@/components/layout/Navbar'
 import Footer from '@/components/layout/Footer'
@@ -7,11 +6,7 @@ import {WalletProvider} from '@/components/providers/WalletProvider'
 import { Buffer } from 'buffer'
 
 globalThis.Buffer = Buffer;
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-jetbrains-mono',
-})
+
 
 export const metadata: Metadata = {
   title: 'Solstice — Decentralized Prediction Markets on Solana',
@@ -25,7 +20,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={jetbrainsMono.variable}>
+    <html lang="en" className="font-mono antialiased">
       <body className="font-mono antialiased">
         <div className="bg-glow" />
         <div className="bg-grid" />
