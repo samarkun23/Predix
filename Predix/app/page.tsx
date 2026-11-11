@@ -33,7 +33,7 @@ export default function HomePage() {
             {
               id: 'tvl',
               label: 'TOTAL_VALUE_LOCKED',
-              value: `$${(allMarkets.length * 15).toFixed(1)}K+`,
+              value: `$${(allMarkets.length * 15).toFixed(1)}+`,
               accent: 'green',
             },
             {
